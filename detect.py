@@ -115,11 +115,12 @@ def run_video_detection(model_path, source, conf, save_dir, save_txt):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO26 Inference Script')
-    parser.add_argument('--video', default=False,  help='Enable video detection mode') # 是否启用视频检测模式
+    parser.add_argument('--video', default=True,  help='Enable video detection mode') # 是否启用视频检测模式
 
 
-    parser.add_argument('--model', type=str, default=r'.\weights\ultralytics\yolo26\yolo26n\yolo26_v2i.pt', help='Path to model weights')
-    parser.add_argument('--source', type=str, default=r'E:\Files\video_to_imgs\all_frames', help='Source directory, image path, or video file path')
+    parser.add_argument('--model', type=str, default=r'.\weights\yolo26_v2i-2.pt', help='Path to model weights')
+    # parser.add_argument('--source', type=str, default=r'E:\Files\video_to_imgs\all_frames', help='Source directory, image path, or video file path')
+    parser.add_argument('--source', type=str, default=r'E:\Files\video_to_imgs\video.mp4', help='Source directory, image path, or video file path')
     parser.add_argument('--conf', type=float, default=0.25, help='Confidence threshold')
     parser.add_argument('--save-dir', type=str, default=None, help='Output directory (auto-incrementing if not specified)')
     parser.add_argument('--save-txt', default=True, help='Save detection results as txt files') # 是否保存检测结果的txt文件
