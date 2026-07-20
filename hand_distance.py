@@ -159,7 +159,6 @@ def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_thresh
     removed_frames = []
     
     if triggered_frames:
-        filtered_frames.append(triggered_frames[0])
         last_kept_frame = triggered_frames[0]
         last_kept_path = os.path.join(screenshots_dir, f'screenshot_{last_kept_frame:06d}.jpg')
         last_kept_image = cv2.imread(last_kept_path)
@@ -169,24 +168,32 @@ def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_thresh
             current_image = cv2.imread(current_path)
             
             if current_image is None or last_kept_image is None:
-                filtered_frames.append(frame)
+                removed_frames.append(last_kept_frame)
+                old_path = os.path.join(screenshots_dir, f'screenshot_{last_kept_frame:06d}.jpg')
+                if os.path.exists(old_path):
+                    os.remove(old_path)
                 last_kept_frame = frame
                 last_kept_image = current_image
-                print(f"  保留帧 {frame} (图片读取错误)")
+                print(f"  替换帧 {last_kept_frame} (图片读取错误)")
                 continue
             
             distance = orb_distance(last_kept_image, current_image)
             
             if distance <= similarity_threshold:
-                removed_frames.append(frame)
-                if os.path.exists(current_path):
-                    os.remove(current_path)
-                # print(f"  删除帧 {frame} (与帧 {last_kept_frame} 相似, 距离={distance:.4f})")
-            else:
-                filtered_frames.append(frame)
+                removed_frames.append(last_kept_frame)
+                old_path = os.path.join(screenshots_dir, f'screenshot_{last_kept_frame:06d}.jpg')
+                if os.path.exists(old_path):
+                    os.remove(old_path)
                 last_kept_frame = frame
                 last_kept_image = current_image
-                # print(f"  保留帧 {frame} (与帧 {last_kept_frame} 不同, 距离={distance:.4f})")
+                # print(f"  替换帧 {frame} (与帧 {last_kept_frame} 相似, 保留最新)")
+            else:
+                filtered_frames.append(last_kept_frame)
+                last_kept_frame = frame
+                last_kept_image = current_image
+                # print(f"  保留帧 {last_kept_frame} (与前一帧不同)")
+        
+        filtered_frames.append(last_kept_frame)
     
     print(f"过滤后帧: {filtered_frames}")
     print(f"已删除帧: {removed_frames}")
@@ -405,16 +412,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部距离计算器（自动截图）')
     parser.add_argument('--model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt', 
                         help='手部检测模型权重路径')
-    parser.add_argument('--source', type=str, default=r'videoes/video (1).mp4', 
+    parser.add_argument('--source', type=str, default=r'videoes/video (7).mp4', 
                         help='源目录、图片路径或视频文件路径')
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
     parser.add_argument('--save-dir', type=str, default=None, 
                         help='输出目录（未指定时自动递增）')
     parser.add_argument('--save-txt', default=True, action='store_true', 
                         help='保存距离结果为txt文件')
-    parser.add_argument('--distance-threshold', type=int, default=1400, 
+    parser.add_argument('--distance-threshold', type=int, default=1500, 
                         help='触发截图的距离阈值（像素）')
-    parser.add_argument('--stable-duration', type=float, default=3.0, 
+    parser.add_argument('--stable-duration', type=float, default=1, 
                         help='触发截图所需的稳定时长（秒）')
     parser.add_argument('--crop-ratio', type=float, default=0.2, 
                         help='图像两边向中央裁剪的总比例（默认0，即不裁剪）。例如0.3表示左右各裁剪15%，总共裁剪30%')
