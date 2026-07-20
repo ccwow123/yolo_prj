@@ -73,11 +73,12 @@ def run_video_detection(model_path, source, conf, save_dir, save_txt):
     
     os.makedirs(save_dir, exist_ok=True)
     
-    output_video_path = os.path.join(save_dir, 'output.mp4')
+    video_name = os.path.basename(source)
+    output_video_path = os.path.join(save_dir, f"det_{video_name}")
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
     
-    print("Processing video frames...")
+    print(f"Processing video: {video_name}")
     with tqdm(total=total_frames, desc="Processing frames", unit="frame") as pbar:
         frame_count = 0
         while cap.isOpened():
@@ -113,27 +114,77 @@ def run_video_detection(model_path, source, conf, save_dir, save_txt):
     out.release()
     print(f"\nVideo detection completed. Output saved to {output_video_path}")
 
+def run_detection(model_path, source, conf, save_dir, save_txt):
+    video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.webm')
+    
+    if save_dir is None:
+        save_dir = get_next_exp_dir()
+    
+    os.makedirs(save_dir, exist_ok=True)
+    print(f"Results will be saved to: {save_dir}")
+    
+    if os.path.isfile(source):
+        if source.lower().endswith(video_extensions):
+            run_video_detection(model_path, source, conf, save_dir, save_txt)
+        else:
+            print(f"Processing single image: {os.path.basename(source)}")
+            model = YOLO(model_path)
+            results = model(source, conf=conf, save=False, verbose=False)
+            result = results[0]
+            img_name = os.path.basename(source)
+            
+            if save_txt:
+                txt_path = os.path.join(save_dir, os.path.splitext(img_name)[0] + '.txt')
+                with open(txt_path, 'w') as f:
+                    for box in result.boxes:
+                        cls = int(box.cls)
+                        conf = float(box.conf)
+                        xywh = box.xywh[0].tolist()
+                        line = f"{cls} {xywh[0]} {xywh[1]} {xywh[2]} {xywh[3]} {conf}\n"
+                        f.write(line)
+            
+            result.save(os.path.join(save_dir, img_name))
+            print(f"Saved result for {img_name}")
+    
+    elif os.path.isdir(source):
+        files = [f for f in os.listdir(source) if os.path.isfile(os.path.join(source, f))]
+        
+        with tqdm(total=len(files), desc="Processing files", unit="file") as pbar:
+            for filename in files:
+                filepath = os.path.join(source, filename)
+                if filepath.lower().endswith(video_extensions):
+                    run_video_detection(model_path, filepath, conf, save_dir, save_txt)
+                else:
+                    model = YOLO(model_path)
+                    results = model(filepath, conf=conf, save=False, verbose=False)
+                    result = results[0]
+                    
+                    if save_txt:
+                        txt_path = os.path.join(save_dir, os.path.splitext(filename)[0] + '.txt')
+                        with open(txt_path, 'w') as f:
+                            for box in result.boxes:
+                                cls = int(box.cls)
+                                conf = float(box.conf)
+                                xywh = box.xywh[0].tolist()
+                                line = f"{cls} {xywh[0]} {xywh[1]} {xywh[2]} {xywh[3]} {conf}\n"
+                                f.write(line)
+                    
+                    result.save(os.path.join(save_dir, filename))
+                pbar.update(1)
+        print(f"\nAll files processed. Results saved to {save_dir}")
+    
+    else:
+        print(f"Error: Source {source} not found")
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='YOLO26 Inference Script')
-    parser.add_argument('--video', default=True,  help='Enable video detection mode') # 是否启用视频检测模式
-
-
-    parser.add_argument('--model', type=str, default=r'.\weights\yolo26_v2i-2.pt', help='Path to model weights')
-    # parser.add_argument('--source', type=str, default=r'E:\Files\video_to_imgs\all_frames', help='Source directory, image path, or video file path')
+    parser = argparse.ArgumentParser(description='YOLO Hand Detection Inference Script')
+    parser.add_argument('--model', type=str, default=r'yolov8n-pose.pt', help='Path to model weights (use hand detection weights for hand tracking)')
     parser.add_argument('--source', type=str, default=r'E:\Files\video_to_imgs\video.mp4', help='Source directory, image path, or video file path')
     parser.add_argument('--conf', type=float, default=0.25, help='Confidence threshold')
     parser.add_argument('--save-dir', type=str, default=None, help='Output directory (auto-incrementing if not specified)')
-    parser.add_argument('--save-txt', default=True, help='Save detection results as txt files') # 是否保存检测结果的txt文件
-
-
+    parser.add_argument('--save-txt', action='store_true', help='Save detection results as txt files')
+    
     args = parser.parse_args()
     
-    if args.save_dir is None:
-        args.save_dir = get_next_exp_dir()
-    
-    print(f"Results will be saved to: {args.save_dir}")
-    
-    if args.video:
-        run_video_detection(args.model, args.source, args.conf, args.save_dir, args.save_txt)
-    else:
-        run_image_detection(args.model, args.source, args.conf, args.save_dir, args.save_txt)
+    print(f"Using model: {args.model}")
+    run_detection(args.model, args.source, args.conf, args.save_dir, args.save_txt)
