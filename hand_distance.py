@@ -71,7 +71,21 @@ def calculate_hand_distance(image, boxes):
     
     return distance, annotated, [left_hand, right_hand]
 
-def process_single_image(model, image_path, save_dir, save_txt):
+def crop_image(image, crop_ratio=0.3):
+    if crop_ratio <= 0:
+        return image
+    height, width = image.shape[:2]
+    half_crop = crop_ratio / 2
+    start_x = int(width * half_crop)
+    end_x = int(width * (1 - half_crop))
+    return image[:, start_x:end_x]
+
+def compress_image(image, quality=80):
+    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+    _, encoded = cv2.imencode('.jpg', image, encode_param)
+    return cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+
+def process_single_image(model, image_path, save_dir, save_txt, crop_ratio=0.3, quality=80):
     image = cv2.imread(image_path)
     if image is None:
         print(f"错误：无法读取图片 {image_path}")
@@ -86,8 +100,12 @@ def process_single_image(model, image_path, save_dir, save_txt):
     
     distance, annotated, hands = calculate_hand_distance(image, result.boxes)
     
+    annotated = crop_image(annotated, crop_ratio)
+    annotated = compress_image(annotated, quality)
+    
     img_name = os.path.basename(image_path)
-    output_path = os.path.join(save_dir, img_name)
+    name, ext = os.path.splitext(img_name)
+    output_path = os.path.join(save_dir, f'{name}.jpg')
     cv2.imwrite(output_path, annotated)
     
     if save_txt and distance is not None:
@@ -143,11 +161,11 @@ def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_thresh
     if triggered_frames:
         filtered_frames.append(triggered_frames[0])
         last_kept_frame = triggered_frames[0]
-        last_kept_path = os.path.join(screenshots_dir, f'screenshot_{last_kept_frame:06d}.png')
+        last_kept_path = os.path.join(screenshots_dir, f'screenshot_{last_kept_frame:06d}.jpg')
         last_kept_image = cv2.imread(last_kept_path)
         
         for frame in triggered_frames[1:]:
-            current_path = os.path.join(screenshots_dir, f'screenshot_{frame:06d}.png')
+            current_path = os.path.join(screenshots_dir, f'screenshot_{frame:06d}.jpg')
             current_image = cv2.imread(current_path)
             
             if current_image is None or last_kept_image is None:
@@ -163,19 +181,19 @@ def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_thresh
                 removed_frames.append(frame)
                 if os.path.exists(current_path):
                     os.remove(current_path)
-                print(f"  删除帧 {frame} (与帧 {last_kept_frame} 相似, 距离={distance:.4f})")
+                # print(f"  删除帧 {frame} (与帧 {last_kept_frame} 相似, 距离={distance:.4f})")
             else:
                 filtered_frames.append(frame)
                 last_kept_frame = frame
                 last_kept_image = current_image
-                print(f"  保留帧 {frame} (与帧 {last_kept_frame} 不同, 距离={distance:.4f})")
+                # print(f"  保留帧 {frame} (与帧 {last_kept_frame} 不同, 距离={distance:.4f})")
     
     print(f"过滤后帧: {filtered_frames}")
     print(f"已删除帧: {removed_frames}")
     
     return filtered_frames, removed_frames
 
-def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400, stable_duration=1.0):
+def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400, stable_duration=1.0, crop_ratio=0.3, quality=80):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"错误：无法打开视频文件 {video_path}")
@@ -192,13 +210,19 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     video_name = os.path.basename(video_path)
     output_video_path = os.path.join(save_dir, f'hand_distance_{video_name}')
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+    
+    out_width = int(width * (1 - crop_ratio)) if crop_ratio > 0 else width
+    
+    bitrate = int((quality / 100) * 2000000)
+    out = cv2.VideoWriter(output_video_path, fourcc, fps, (out_width, height), True)
+    out.set(cv2.CAP_PROP_BITRATE, bitrate)
     
     screenshots_dir = os.path.join(save_dir, 'screenshots')
     os.makedirs(screenshots_dir, exist_ok=True)
     
     distances = []
     frame_distance_log = []
+    screenshot_distances = []
     continue_long_dist_frame = 0
     screenshot_count = 0
     triggered_frames = []
@@ -215,8 +239,10 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
                 break
             
             if frame_count == 0:
-                screenshot_path = os.path.join(screenshots_dir, f'screenshot_{frame_count:06d}.png')
-                cv2.imwrite(screenshot_path, frame)
+                cropped_frame = crop_image(frame, crop_ratio)
+                cropped_frame = compress_image(cropped_frame, quality)
+                screenshot_path = os.path.join(screenshots_dir, f'screenshot_{frame_count:06d}.jpg')
+                cv2.imwrite(screenshot_path, cropped_frame)
                 screenshot_count += 1
                 triggered_frames.append(frame_count)
                 print(f"\n首帧截图已保存到 {screenshot_path}")
@@ -238,11 +264,14 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
                                     (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
                         
                         if continue_long_dist_frame >= need_frames:
-                            screenshot_path = os.path.join(screenshots_dir, f'screenshot_{frame_count:06d}.png')
-                            cv2.imwrite(screenshot_path, frame)
+                            cropped_frame = crop_image(frame, crop_ratio)
+                            cropped_frame = compress_image(cropped_frame, quality)
+                            screenshot_path = os.path.join(screenshots_dir, f'screenshot_{frame_count:06d}.jpg')
+                            cv2.imwrite(screenshot_path, cropped_frame)
                             screenshot_count += 1
                             triggered_frames.append(frame_count)
-                            print(f"\n在帧 {frame_count} 触发截图！已保存到 {screenshot_path}")
+                            screenshot_distances.append(distance)
+                            # print(f"\n在帧 {frame_count} 触发截图！已保存到 {screenshot_path} (距离: {distance:.1f}px)")
                             continue_long_dist_frame = 0
                     else:
                         continue_long_dist_frame = 0
@@ -256,6 +285,7 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
             
             frame_distance_log.append((frame_count, current_distance))
             
+            annotated = crop_image(annotated, crop_ratio)
             out.write(annotated)
             frame_count += 1
             pbar.update(1)
@@ -283,6 +313,14 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
             f.write(f"捕获截图总数: {screenshot_count}\n")
             f.write(f"去重后截图数: {len(filtered_frames)}\n")
             f.write(f"已移除重复截图: {len(removed_frames)}\n")
+            if screenshot_distances:
+                avg_screenshot_distance = np.mean(screenshot_distances)
+                f.write(f"\n=== 截图时双手距离统计 ===\n")
+                f.write(f"截图时距离列表: {', '.join([f'{d:.1f}' for d in screenshot_distances])} px\n")
+                f.write(f"截图时平均距离: {avg_screenshot_distance:.1f} px\n")
+                f.write(f"图像宽度: {width} px\n")
+                album_ratio = avg_screenshot_distance / width
+                f.write(f"画册所占比例:{album_ratio * 100:.2f}%,建议剪裁比例为({1-album_ratio:.2f})\n")
             if filtered_frames:
                 f.write(f"\n最终触发帧: {', '.join(map(str, filtered_frames))}\n")
                 f.write("最终触发时间戳(秒):\n")
@@ -320,8 +358,17 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     #         print(f"  帧 {frame}: {frame / fps:.2f}秒")
     if distances:
         print(f"\n平均距离: {np.mean(distances):.1f} px")
+    
+    if screenshot_distances:
+        avg_screenshot_distance = np.mean(screenshot_distances)
+        album_ratio = avg_screenshot_distance / width
+        print(f"\n=== 截图时双手距离统计 ===")
+        # print(f"截图时距离列表: {', '.join([f'{d:.1f}' for d in screenshot_distances])} px")
+        print(f"截图时平均距离: {avg_screenshot_distance:.1f} px")
+        print(f"图像宽度: {width} px")
+        print(f"画册所占比例:{album_ratio * 100:.2f}%,建议剪裁比例为({1-album_ratio:.2f})\n")
 
-def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_threshold=1400, stable_duration=1.0):
+def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_threshold=1400, stable_duration=1.0, crop_ratio=0.3, quality=80):
     model = YOLO(model_path)
     
     if save_dir is None:
@@ -334,9 +381,9 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_thr
     
     if os.path.isfile(source):
         if source.lower().endswith(video_extensions):
-            process_video(model, source, save_dir, save_txt, distance_threshold, stable_duration)
+            process_video(model, source, save_dir, save_txt, distance_threshold, stable_duration, crop_ratio, quality)
         else:
-            process_single_image(model, source, save_dir, save_txt)
+            process_single_image(model, source, save_dir, save_txt, crop_ratio, quality)
     
     elif os.path.isdir(source):
         files = [f for f in os.listdir(source) if os.path.isfile(os.path.join(source, f))]
@@ -345,9 +392,9 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_thr
             for filename in files:
                 filepath = os.path.join(source, filename)
                 if filepath.lower().endswith(video_extensions):
-                    process_video(model, filepath, save_dir, save_txt, distance_threshold, stable_duration)
+                    process_video(model, filepath, save_dir, save_txt, distance_threshold, stable_duration, crop_ratio, quality)
                 else:
-                    process_single_image(model, filepath, save_dir, save_txt)
+                    process_single_image(model, filepath, save_dir, save_txt, crop_ratio, quality)
                 pbar.update(1)
         print(f"\n所有文件处理完成。结果保存到 {save_dir}")
     
@@ -356,9 +403,9 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_thr
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部距离计算器（自动截图）')
-    parser.add_argument('--model', type=str, default=r'./weights/hand_yolov8n.pt', 
+    parser.add_argument('--model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt', 
                         help='手部检测模型权重路径')
-    parser.add_argument('--source', type=str, default=r'E:\Files\video_to_imgs\video (2).mp4', 
+    parser.add_argument('--source', type=str, default=r'videoes/video (1).mp4', 
                         help='源目录、图片路径或视频文件路径')
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
     parser.add_argument('--save-dir', type=str, default=None, 
@@ -367,14 +414,20 @@ if __name__ == '__main__':
                         help='保存距离结果为txt文件')
     parser.add_argument('--distance-threshold', type=int, default=1400, 
                         help='触发截图的距离阈值（像素）')
-    parser.add_argument('--stable-duration', type=float, default=2.0, 
+    parser.add_argument('--stable-duration', type=float, default=3.0, 
                         help='触发截图所需的稳定时长（秒）')
+    parser.add_argument('--crop-ratio', type=float, default=0.2, 
+                        help='图像两边向中央裁剪的总比例（默认0，即不裁剪）。例如0.3表示左右各裁剪15%，总共裁剪30%')
+    parser.add_argument('--quality', type=int, default=80, 
+                        help='图像/视频压缩质量（1-100，默认80，值越高质量越好文件越大）')
     
     args = parser.parse_args()
     
     print(f"使用模型: {args.model}")
     print(f"距离阈值: {args.distance_threshold} px")
     print(f"稳定时长: {args.stable_duration} 秒")
+    print(f"裁剪比例: {args.crop_ratio}")
+    print(f"压缩质量: {args.quality}")
     
     run_hand_distance(args.model, args.source, args.conf, args.save_dir, args.save_txt,
-                      args.distance_threshold, args.stable_duration)
+                      args.distance_threshold, args.stable_duration, args.crop_ratio, args.quality)
