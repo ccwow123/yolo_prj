@@ -74,29 +74,8 @@ def remove_hands(image_path, model, conf=0.4, book_width_ratio=0.0, min_area=500
     img_no_hand = img.copy()
     
     if np.any(hand_mask == 255):
-        h_img, w_img = img.shape[:2]
-        contours, _ = cv2.findContours(hand_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        for cnt in contours:
-            x, y, w_cnt, h_cnt = cv2.boundingRect(cnt)
-            cx = x + w_cnt // 2
-            
-            if cx < w_img // 2:
-                fill_x = min(x + w_cnt + 5, w_img - 1)
-                fill_region = img[y:y+h_cnt, fill_x:fill_x+5, :]
-                print(f"  左手区域，取右侧颜色")
-            else:
-                fill_x = max(x - 5, 0)
-                fill_region = img[y:y+h_cnt, fill_x:fill_x+5, :]
-                print(f"  右手区域，取左侧颜色")
-            
-            if fill_region.size > 0:
-                fill_color = np.median(fill_region, axis=(0, 1)).astype(np.uint8)
-                print(f"  填充颜色: {fill_color}")
-                mask_roi = hand_mask[y:y+h_cnt, x:x+w_cnt]
-                img_no_hand[y:y+h_cnt, x:x+w_cnt][mask_roi == 255] = fill_color
-        
-        print("  手部区域已填充")
+        img_no_hand[hand_mask == 255] = [255, 255, 255]
+        print("  手部区域已填充白色")
     else:
         print("  未检测到手部")
     
@@ -175,7 +154,10 @@ def process_folder(input_dir, output_dir, model_path, conf=0.4, book_width_ratio
                 )
                 
                 output_path = os.path.join(output_dir, f"{name}_nohand{ext}")
-                cv2.imwrite(output_path, img_no_hand)
+                if ext.lower() in ['.jpg', '.jpeg']:
+                    cv2.imwrite(output_path, img_no_hand, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                else:
+                    cv2.imwrite(output_path, img_no_hand)
                 
                 mask_path = os.path.join(mask_dir, f"{name}_mask.png")
                 cv2.imwrite(mask_path, mask)
