@@ -178,11 +178,11 @@ def run_detection(model_path, source, conf, save_dir, save_txt):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO Hand Detection Inference Script')
-    parser.add_argument('--model', type=str, default=r'yolov8n-pose.pt', help='Path to model weights (use hand detection weights for hand tracking)')
+    parser.add_argument('--model', type=str, default=r'weights/yolov8n-pose.pt', help='Path to model weights (use hand detection weights for hand tracking)')
     parser.add_argument('--source', type=str, default=r'E:\Files\video_to_imgs\video.mp4', help='Source directory, image path, or video file path')
     parser.add_argument('--conf', type=float, default=0.25, help='Confidence threshold')
-    parser.add_argument('--save-dir', type=str, default=None, help='Output directory (auto-incrementing if not specified)')
-    parser.add_argument('--save-txt', action='store_true', help='Save detection results as txt files')
+    parser.add_argument('--save-dir', type=str, default=None, help='Output directory for saving results')
+    parser.add_argument('--save-txt', default=True, action='store_true', help='Save detection results as txt files')
     
     args = parser.parse_args()
     
