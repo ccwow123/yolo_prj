@@ -5,6 +5,15 @@ import numpy as np
 from ultralytics import YOLO
 from tqdm import tqdm
 
+def get_next_exp_dir(base_dir):
+    os.makedirs(base_dir, exist_ok=True)
+    exp_num = 0
+    while True:
+        exp_dir = os.path.join(base_dir, f"exp{exp_num}" if exp_num > 0 else "exp")
+        if not os.path.exists(exp_dir):
+            return exp_dir
+        exp_num += 1
+
 def remove_hands(image_path, model, conf=0.4, book_width_ratio=0.0, min_area=5000, 
                  max_area=100000, aspect_ratio_range=(0.3, 3.0), visualize_mask=False):
     img = cv2.imread(image_path)
@@ -63,7 +72,33 @@ def remove_hands(image_path, model, conf=0.4, book_width_ratio=0.0, min_area=500
                 hand_mask[seg_mask > 0.5] = 255
     
     img_no_hand = img.copy()
-    img_no_hand[hand_mask == 255] = [255, 255, 255]
+    
+    if np.any(hand_mask == 255):
+        h_img, w_img = img.shape[:2]
+        contours, _ = cv2.findContours(hand_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        for cnt in contours:
+            x, y, w_cnt, h_cnt = cv2.boundingRect(cnt)
+            cx = x + w_cnt // 2
+            
+            if cx < w_img // 2:
+                fill_x = min(x + w_cnt + 5, w_img - 1)
+                fill_region = img[y:y+h_cnt, fill_x:fill_x+5, :]
+                print(f"  左手区域，取右侧颜色")
+            else:
+                fill_x = max(x - 5, 0)
+                fill_region = img[y:y+h_cnt, fill_x:fill_x+5, :]
+                print(f"  右手区域，取左侧颜色")
+            
+            if fill_region.size > 0:
+                fill_color = np.median(fill_region, axis=(0, 1)).astype(np.uint8)
+                print(f"  填充颜色: {fill_color}")
+                mask_roi = hand_mask[y:y+h_cnt, x:x+w_cnt]
+                img_no_hand[y:y+h_cnt, x:x+w_cnt][mask_roi == 255] = fill_color
+        
+        print("  手部区域已填充")
+    else:
+        print("  未检测到手部")
     
     plot_img = None
     if len(results) > 0:
@@ -191,9 +226,9 @@ def process_folder(input_dir, output_dir, model_path, conf=0.4, book_width_ratio
 
 def main():
     parser = argparse.ArgumentParser(description='使用YOLO手部分割模型移除图片中的手部')
-    parser.add_argument('--input', type=str, default=r'./runs/hand_distance/exp6/screenshots', help='输入图片目录')
-    parser.add_argument('--output', type=str, default=r'./runs/remove_hands/exp', help='输出目录')
-    parser.add_argument('--model', type=str, default='yolov8s-seg.pt', help='手部分割模型路径')
+    parser.add_argument('--input', type=str, default=r'./runs/hand_distance/exp9/screenshots', help='输入图片目录')
+    parser.add_argument('--output', type=str, default=r'./runs/remove_hands/', help='输出目录')
+    parser.add_argument('--model', type=str, default=r'./weights/ultralytics/yolov8s-seg.pt', help='手部分割模型路径')
     parser.add_argument('--conf', type=float, default=0.4, help='置信度阈值，越高误检越少')
     parser.add_argument('--min-area', type=int, default=5000, help='最小面积阈值，过滤小面积误检')
     parser.add_argument('--max-area', type=int, default=100000, help='最大面积阈值，过滤大面积误检')
@@ -209,9 +244,12 @@ def main():
         print(f"错误: 输入目录不存在: {args.input}")
         return
     
+    output_dir = get_next_exp_dir(args.output)
+    print(f"输出目录: {output_dir}")
+    
     process_folder(
         args.input,
-        args.output,
+        output_dir,
         args.model,
         conf=args.conf,
         book_width_ratio=args.book_width_ratio,
