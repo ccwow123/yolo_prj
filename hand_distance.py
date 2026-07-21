@@ -221,9 +221,7 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     
     out_width = int(width * (1 - crop_ratio)) if crop_ratio > 0 else width
     
-    bitrate = int((quality / 100) * 2000000)
     out = cv2.VideoWriter(output_video_path, fourcc, fps, (out_width, height), True)
-    out.set(cv2.VIDEOWRITER_PROP_BITRATE, bitrate)
     
     screenshots_dir = os.path.join(save_dir, 'screenshots')
     os.makedirs(screenshots_dir, exist_ok=True)
@@ -459,7 +457,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部距离计算器（自动截图）')
     parser.add_argument('--model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt', 
                         help='手部检测模型权重路径')
-    parser.add_argument('--source', type=str, default=r'E:\Download\pixiv 插画年鉴 2026.mp4', 
+    parser.add_argument('--source', type=str, default=r"E:\Download\travidebla.mp4", 
                         help='源目录、图片路径或视频文件路径')
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
     parser.add_argument('--save-dir', type=str, default=None, 
