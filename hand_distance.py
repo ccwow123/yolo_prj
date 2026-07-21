@@ -174,9 +174,6 @@ def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_thresh
             if frame_image is None or prev_image is None:
                 if current_frame is not None:
                     removed_frames.append(current_frame)
-                    old_path = os.path.join(screenshots_dir, f'screenshot_{current_frame:06d}.jpg')
-                    if os.path.exists(old_path):
-                        os.remove(old_path)
                 current_frame = prev_frame
                 current_image = prev_image
                 prev_frame = frame
@@ -195,9 +192,6 @@ def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_thresh
             
             if distance <= similarity_threshold:
                 removed_frames.append(current_frame)
-                old_path = os.path.join(screenshots_dir, f'screenshot_{current_frame:06d}.jpg')
-                if os.path.exists(old_path):
-                    os.remove(old_path)
                 current_frame = prev_frame
                 current_image = prev_image
                 prev_frame = frame
@@ -213,9 +207,6 @@ def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_thresh
             filtered_frames.append(current_frame)
             if prev_frame != current_frame:
                 removed_frames.append(prev_frame)
-                old_path = os.path.join(screenshots_dir, f'screenshot_{prev_frame:06d}.jpg')
-                if os.path.exists(old_path):
-                    os.remove(old_path)
     
     # print(f"过滤后帧: {filtered_frames}")
     # print(f"已删除帧: {removed_frames}")
@@ -358,6 +349,20 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     
     print("\n正在使用ORB相似度进行去重...")
     filtered_frames, removed_frames = deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_threshold=0.7)
+    
+    video_name_no_ext = os.path.splitext(video_name)[0]
+    filtered_dir = os.path.join(save_dir, video_name_no_ext)
+    os.makedirs(filtered_dir, exist_ok=True)
+    
+    print(f"\n正在复制去重后的截图到: {filtered_dir}")
+    for frame_num in filtered_frames:
+        src_path = os.path.join(screenshots_dir, f'screenshot_{frame_num:06d}.jpg')
+        dst_path = os.path.join(filtered_dir, f'screenshot_{frame_num:06d}.jpg')
+        if os.path.exists(src_path):
+            import shutil
+            shutil.copy(src_path, dst_path)
+            print(f"  复制: screenshot_{frame_num:06d}.jpg")
+    print(f"已复制 {len(filtered_frames)} 张截图")
     
     if save_txt:
         summary_path = os.path.join(save_dir, 'distance_summary.txt')
@@ -524,7 +529,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部距离计算器（自动截图）')
     parser.add_argument('--model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt', 
                         help='手部检测模型权重路径')
-    parser.add_argument('--source', type=str, default=r"E:\Download\展览会图录.mp4", 
+    parser.add_argument('--source', type=str, default=r"E:\Download\恋上百合的101天.mp4", 
                         help='源目录、图片路径或视频文件路径')
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
     parser.add_argument('--save-dir', type=str, default=None, 
@@ -533,9 +538,9 @@ if __name__ == '__main__':
                         help='不保存距离结果为txt文件')
     parser.add_argument('--distance-threshold', type=int, default=1500, 
                         help='触发截图的距离阈值（像素）')
-    parser.add_argument('--stable-duration', type=float, default=1, 
+    parser.add_argument('--stable-duration', type=float, default=2, 
                         help='触发截图所需的稳定时长（秒）')
-    parser.add_argument('--crop-ratio', type=float, default=0.15, 
+    parser.add_argument('--crop-ratio', type=float, default=0.2, 
                         help='图像两边向中央裁剪的总比例（默认0，即不裁剪）。例如0.3表示左右各裁剪15%，总共裁剪30%')
     parser.add_argument('--quality', type=int, default=80, 
                         help='图像/视频压缩质量（1-100，默认80，值越高质量越好文件越大）')
