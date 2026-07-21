@@ -196,8 +196,8 @@ def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_thresh
         
         filtered_frames.append(last_kept_frame)
     
-    print(f"过滤后帧: {filtered_frames}")
-    print(f"已删除帧: {removed_frames}")
+    # print(f"过滤后帧: {filtered_frames}")
+    # print(f"已删除帧: {removed_frames}")
     
     return filtered_frames, removed_frames
 
@@ -251,7 +251,7 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
                 cv2.imwrite(screenshot_path, cropped_frame)
                 screenshot_count += 1
                 triggered_frames.append(frame_count)
-                print(f"\n首帧截图已保存到 {screenshot_path}")
+                # print(f"\n首帧截图已保存到 {screenshot_path}")
             
             results = model(frame, verbose=False, conf=conf)
             result = results[0]
@@ -406,15 +406,25 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_thr
     
     print(f"\n=== 加载模型 ===")
     try:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = YOLO(model_path)
+        model.to(device)
         print(f"模型加载成功: {model_path}")
         
-        device = model.device
-        if device.type == 'cuda':
+        actual_device = model.device
+        if actual_device.type == 'cuda':
             print(f"使用设备: GPU (CUDA)")
-            print(f"GPU名称: {torch.cuda.get_device_name(device.index)}")
+            print(f"GPU名称: {torch.cuda.get_device_name(actual_device.index)}")
         else:
             print(f"使用设备: CPU")
+            if torch.cuda.is_available():
+                print("警告: CUDA可用但模型仍在CPU上运行，尝试强制移动到GPU")
+                model.cuda()
+                actual_device = model.device
+                if actual_device.type == 'cuda':
+                    print(f"成功移动到GPU: {torch.cuda.get_device_name(actual_device.index)}")
+            else:
+                print("提示: CUDA不可用")
     except Exception as e:
         print(f"模型加载失败: {e}")
         return
