@@ -2,6 +2,7 @@ import argparse
 import os
 import cv2
 import numpy as np
+import torch
 from ultralytics import YOLO
 from tqdm import tqdm
 
@@ -85,13 +86,13 @@ def compress_image(image, quality=80):
     _, encoded = cv2.imencode('.jpg', image, encode_param)
     return cv2.imdecode(encoded, cv2.IMREAD_COLOR)
 
-def process_single_image(model, image_path, save_dir, save_txt, crop_ratio=0.3, quality=80):
+def process_single_image(model, image_path, save_dir, save_txt, crop_ratio=0.3, quality=80, conf=0.6):
     image = cv2.imread(image_path)
     if image is None:
         print(f"错误：无法读取图片 {image_path}")
         return
     
-    results = model(image, verbose=False)
+    results = model(image, verbose=False, conf=conf)
     result = results[0]
     
     if result.boxes is None or len(result.boxes) == 0:
@@ -200,7 +201,7 @@ def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_thresh
     
     return filtered_frames, removed_frames
 
-def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400, stable_duration=1.0, crop_ratio=0.3, quality=80):
+def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400, stable_duration=1.0, crop_ratio=0.3, quality=80, conf=0.6):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"错误：无法打开视频文件 {video_path}")
@@ -222,7 +223,7 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     
     bitrate = int((quality / 100) * 2000000)
     out = cv2.VideoWriter(output_video_path, fourcc, fps, (out_width, height), True)
-    out.set(cv2.CAP_PROP_BITRATE, bitrate)
+    out.set(cv2.VIDEOWRITER_PROP_BITRATE, bitrate)
     
     screenshots_dir = os.path.join(save_dir, 'screenshots')
     os.makedirs(screenshots_dir, exist_ok=True)
@@ -254,7 +255,7 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
                 triggered_frames.append(frame_count)
                 print(f"\n首帧截图已保存到 {screenshot_path}")
             
-            results = model(frame, verbose=False)
+            results = model(frame, verbose=False, conf=conf)
             result = results[0]
             
             current_distance = None
@@ -278,7 +279,7 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
                             screenshot_count += 1
                             triggered_frames.append(frame_count)
                             screenshot_distances.append(distance)
-                            # print(f"\n在帧 {frame_count} 触发截图！已保存到 {screenshot_path} (距离: {distance:.1f}px)")
+                            print(f"\n在帧 {frame_count} 触发截图！已保存到 {screenshot_path} (距离: {distance:.1f}px)")
                             continue_long_dist_frame = 0
                     else:
                         continue_long_dist_frame = 0
@@ -375,8 +376,50 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
         print(f"图像宽度: {width} px")
         print(f"画册所占比例:{album_ratio * 100:.2f}%,建议剪裁比例为({1-album_ratio:.2f})\n")
 
+def validate_parameters(crop_ratio, quality, distance_threshold, stable_duration, conf):
+    errors = []
+    if crop_ratio < 0 or crop_ratio >= 1:
+        errors.append(f"裁剪比例 crop_ratio 必须在 [0, 1) 范围内，当前值: {crop_ratio}")
+    if quality < 1 or quality > 100:
+        errors.append(f"压缩质量 quality 必须在 [1, 100] 范围内，当前值: {quality}")
+    if distance_threshold < 0:
+        errors.append(f"距离阈值 distance_threshold 必须大于等于0，当前值: {distance_threshold}")
+    if stable_duration <= 0:
+        errors.append(f"稳定时长 stable_duration 必须大于0，当前值: {stable_duration}")
+    if conf < 0 or conf > 1:
+        errors.append(f"置信度 conf 必须在 [0, 1] 范围内，当前值: {conf}")
+    return errors
+
+def is_video_file(filepath):
+    video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.webm')
+    return filepath.lower().endswith(video_extensions)
+
 def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_threshold=1400, stable_duration=1.0, crop_ratio=0.3, quality=80):
-    model = YOLO(model_path)
+    errors = validate_parameters(crop_ratio, quality, distance_threshold, stable_duration, conf)
+    if errors:
+        print("参数校验失败:")
+        for error in errors:
+            print(f"  - {error}")
+        return
+    
+    if not os.path.exists(source):
+        print(f"错误：源文件/目录 {source} 不存在")
+        return
+    
+    print(f"\n=== 加载模型 ===")
+    try:
+        model = YOLO(model_path)
+        print(f"模型加载成功: {model_path}")
+        
+        device = model.device
+        if device.type == 'cuda':
+            print(f"使用设备: GPU (CUDA)")
+            print(f"GPU名称: {torch.cuda.get_device_name(device.index)}")
+        else:
+            print(f"使用设备: CPU")
+    except Exception as e:
+        print(f"模型加载失败: {e}")
+        return
     
     if save_dir is None:
         save_dir = get_next_exp_dir()
@@ -384,41 +427,45 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_thr
     os.makedirs(save_dir, exist_ok=True)
     print(f"结果将保存到: {save_dir}")
     
-    video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.webm')
-    
     if os.path.isfile(source):
-        if source.lower().endswith(video_extensions):
-            process_video(model, source, save_dir, save_txt, distance_threshold, stable_duration, crop_ratio, quality)
+        if is_video_file(source):
+            process_video(model, source, save_dir, save_txt, distance_threshold, stable_duration, crop_ratio, quality, conf)
         else:
-            process_single_image(model, source, save_dir, save_txt, crop_ratio, quality)
+            process_single_image(model, source, save_dir, save_txt, crop_ratio, quality, conf)
     
     elif os.path.isdir(source):
         files = [f for f in os.listdir(source) if os.path.isfile(os.path.join(source, f))]
         
+        if not files:
+            print(f"警告：目录 {source} 为空")
+            return
+        
+        video_files = [f for f in files if is_video_file(os.path.join(source, f))]
+        image_files = [f for f in files if not is_video_file(os.path.join(source, f))]
+        
+        print(f"\n发现 {len(video_files)} 个视频文件，{len(image_files)} 个图片文件")
+        
         with tqdm(total=len(files), desc="处理文件", unit="file") as pbar:
             for filename in files:
                 filepath = os.path.join(source, filename)
-                if filepath.lower().endswith(video_extensions):
-                    process_video(model, filepath, save_dir, save_txt, distance_threshold, stable_duration, crop_ratio, quality)
+                if is_video_file(filepath):
+                    process_video(model, filepath, save_dir, save_txt, distance_threshold, stable_duration, crop_ratio, quality, conf)
                 else:
-                    process_single_image(model, filepath, save_dir, save_txt, crop_ratio, quality)
+                    process_single_image(model, filepath, save_dir, save_txt, crop_ratio, quality, conf)
                 pbar.update(1)
         print(f"\n所有文件处理完成。结果保存到 {save_dir}")
-    
-    else:
-        print(f"错误：源文件 {source} 未找到")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部距离计算器（自动截图）')
     parser.add_argument('--model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt', 
                         help='手部检测模型权重路径')
-    parser.add_argument('--source', type=str, default=r'videoes/video (7).mp4', 
+    parser.add_argument('--source', type=str, default=r'E:\Download\pixiv 插画年鉴 2026.mp4', 
                         help='源目录、图片路径或视频文件路径')
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
     parser.add_argument('--save-dir', type=str, default=None, 
                         help='输出目录（未指定时自动递增）')
-    parser.add_argument('--save-txt', default=True, action='store_true', 
-                        help='保存距离结果为txt文件')
+    parser.add_argument('--no-save-txt', action='store_true', 
+                        help='不保存距离结果为txt文件')
     parser.add_argument('--distance-threshold', type=int, default=1500, 
                         help='触发截图的距离阈值（像素）')
     parser.add_argument('--stable-duration', type=float, default=1, 
@@ -429,12 +476,14 @@ if __name__ == '__main__':
                         help='图像/视频压缩质量（1-100，默认80，值越高质量越好文件越大）')
     
     args = parser.parse_args()
+    save_txt = not args.no_save_txt
     
     print(f"使用模型: {args.model}")
+    print(f"置信度阈值: {args.conf}")
     print(f"距离阈值: {args.distance_threshold} px")
     print(f"稳定时长: {args.stable_duration} 秒")
     print(f"裁剪比例: {args.crop_ratio}")
     print(f"压缩质量: {args.quality}")
     
-    run_hand_distance(args.model, args.source, args.conf, args.save_dir, args.save_txt,
+    run_hand_distance(args.model, args.source, args.conf, args.save_dir, save_txt,
                       args.distance_threshold, args.stable_duration, args.crop_ratio, args.quality)
