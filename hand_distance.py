@@ -154,47 +154,68 @@ def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_thresh
         return triggered_frames, []
     
     print(f"去重设置: 相似度阈值={similarity_threshold}")
-    print(f"原始触发帧: {triggered_frames}")
+    # print(f"原始触发帧: {triggered_frames}")
     
     filtered_frames = []
     removed_frames = []
     
     if triggered_frames:
-        last_kept_frame = triggered_frames[0]
-        last_kept_path = os.path.join(screenshots_dir, f'screenshot_{last_kept_frame:06d}.jpg')
-        last_kept_image = cv2.imread(last_kept_path)
+        prev_frame = triggered_frames[0]
+        prev_path = os.path.join(screenshots_dir, f'screenshot_{prev_frame:06d}.jpg')
+        prev_image = cv2.imread(prev_path)
+        
+        current_frame = None
+        current_image = None
         
         for frame in triggered_frames[1:]:
-            current_path = os.path.join(screenshots_dir, f'screenshot_{frame:06d}.jpg')
-            current_image = cv2.imread(current_path)
+            frame_path = os.path.join(screenshots_dir, f'screenshot_{frame:06d}.jpg')
+            frame_image = cv2.imread(frame_path)
             
-            if current_image is None or last_kept_image is None:
-                removed_frames.append(last_kept_frame)
-                old_path = os.path.join(screenshots_dir, f'screenshot_{last_kept_frame:06d}.jpg')
-                if os.path.exists(old_path):
-                    os.remove(old_path)
-                last_kept_frame = frame
-                last_kept_image = current_image
-                print(f"  替换帧 {last_kept_frame} (图片读取错误)")
+            if frame_image is None or prev_image is None:
+                if current_frame is not None:
+                    removed_frames.append(current_frame)
+                    old_path = os.path.join(screenshots_dir, f'screenshot_{current_frame:06d}.jpg')
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+                current_frame = prev_frame
+                current_image = prev_image
+                prev_frame = frame
+                prev_image = frame_image
+                print(f"  替换帧 {frame} (图片读取错误)")
                 continue
             
-            distance = orb_distance(last_kept_image, current_image)
+            if current_frame is None:
+                current_frame = prev_frame
+                current_image = prev_image
+                prev_frame = frame
+                prev_image = frame_image
+                continue
+            
+            distance = orb_distance(current_image, frame_image)
             
             if distance <= similarity_threshold:
-                removed_frames.append(last_kept_frame)
-                old_path = os.path.join(screenshots_dir, f'screenshot_{last_kept_frame:06d}.jpg')
+                removed_frames.append(current_frame)
+                old_path = os.path.join(screenshots_dir, f'screenshot_{current_frame:06d}.jpg')
                 if os.path.exists(old_path):
                     os.remove(old_path)
-                last_kept_frame = frame
-                last_kept_image = current_image
-                # print(f"  替换帧 {frame} (与帧 {last_kept_frame} 相似, 保留最新)")
+                current_frame = prev_frame
+                current_image = prev_image
+                prev_frame = frame
+                prev_image = frame_image
             else:
-                filtered_frames.append(last_kept_frame)
-                last_kept_frame = frame
-                last_kept_image = current_image
-                # print(f"  保留帧 {last_kept_frame} (与前一帧不同)")
+                filtered_frames.append(current_frame)
+                current_frame = prev_frame
+                current_image = prev_image
+                prev_frame = frame
+                prev_image = frame_image
         
-        filtered_frames.append(last_kept_frame)
+        if current_frame is not None:
+            filtered_frames.append(current_frame)
+            if prev_frame != current_frame:
+                removed_frames.append(prev_frame)
+                old_path = os.path.join(screenshots_dir, f'screenshot_{prev_frame:06d}.jpg')
+                if os.path.exists(old_path):
+                    os.remove(old_path)
     
     # print(f"过滤后帧: {filtered_frames}")
     # print(f"已删除帧: {removed_frames}")
@@ -213,15 +234,15 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
     need_frames = int(fps * stable_duration)
+    frame_skip = 1
     print(f"视频FPS: {fps}, 需要 {need_frames} 连续帧以满足 {stable_duration}秒触发条件")
+    print(f"帧跳过: 每帧都处理")
     
     video_name = os.path.basename(video_path)
     output_video_path = os.path.join(save_dir, f'hand_distance_{video_name}')
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     
-    out_width = int(width * (1 - crop_ratio)) if crop_ratio > 0 else width
-    
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (out_width, height), True)
+    out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height), True)
     
     screenshots_dir = os.path.join(save_dir, 'screenshots')
     os.makedirs(screenshots_dir, exist_ok=True)
@@ -232,17 +253,24 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     continue_long_dist_frame = 0
     screenshot_count = 0
     triggered_frames = []
+    last_screenshot_frame = -1000
     
     print(f"正在处理视频: {video_name}")
     print(f"距离阈值: {distance_threshold} px")
     print(f"稳定时长: {stable_duration} 秒")
     
+    min_screenshot_interval = int(fps * 0.5)
+    
     with tqdm(total=total_frames, desc="处理帧", unit="frame") as pbar:
         frame_count = 0
+        last_distance = None
+        
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
+            
+            should_process = (frame_count % frame_skip == 0) or (continue_long_dist_frame > 0)
             
             if frame_count == 0:
                 cropped_frame = crop_image(frame, crop_ratio)
@@ -251,47 +279,76 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
                 cv2.imwrite(screenshot_path, cropped_frame)
                 screenshot_count += 1
                 triggered_frames.append(frame_count)
-                # print(f"\n首帧截图已保存到 {screenshot_path}")
-            
-            results = model(frame, verbose=False, conf=conf)
-            result = results[0]
+                last_screenshot_frame = frame_count
             
             current_distance = None
-            if result.boxes is not None and len(result.boxes) >= 2:
-                distance, annotated, hands = calculate_hand_distance(frame, result.boxes)
-                current_distance = distance
-                if distance is not None:
-                    distances.append(distance)
+            annotated = frame.copy()
+            
+            if should_process:
+                results = model(frame, verbose=False, conf=conf)
+                result = results[0]
+                
+                if result.boxes is not None and len(result.boxes) >= 2:
+                    distance, annotated, hands = calculate_hand_distance(frame, result.boxes)
+                    current_distance = distance
+                    last_distance = distance
                     
-                    if distance > distance_threshold:
-                        continue_long_dist_frame += 1
+                    if distance is not None:
+                        distances.append(distance)
                         
+                        if distance > distance_threshold:
+                            continue_long_dist_frame += 1
+                            
+                            cv2.putText(annotated, f"Count: {continue_long_dist_frame}/{need_frames}", 
+                                        (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+                            
+                            if continue_long_dist_frame >= need_frames:
+                                if (frame_count - last_screenshot_frame) >= min_screenshot_interval:
+                                    cropped_frame = crop_image(frame, crop_ratio)
+                                    cropped_frame = compress_image(cropped_frame, quality)
+                                    screenshot_path = os.path.join(screenshots_dir, f'screenshot_{frame_count:06d}.jpg')
+                                    cv2.imwrite(screenshot_path, cropped_frame)
+                                    screenshot_count += 1
+                                    triggered_frames.append(frame_count)
+                                    screenshot_distances.append(distance)
+                                    last_screenshot_frame = frame_count
+                                    # print(f"\n在帧 {frame_count} 触发截图！距离: {distance:.1f}px")
+                                continue_long_dist_frame = 0
+                        else:
+                            continue_long_dist_frame = 0
+                            cv2.putText(annotated, f"Reset - Distance: {distance:.1f}px", 
+                                        (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                else:
+                    cv2.putText(annotated, "Insufficient hands detected", 
+                                (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    continue_long_dist_frame = 0
+                    last_distance = None
+            else:
+                if last_distance is not None:
+                    if last_distance > distance_threshold:
+                        continue_long_dist_frame += 1
                         cv2.putText(annotated, f"Count: {continue_long_dist_frame}/{need_frames}", 
                                     (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
                         
                         if continue_long_dist_frame >= need_frames:
-                            cropped_frame = crop_image(frame, crop_ratio)
-                            cropped_frame = compress_image(cropped_frame, quality)
-                            screenshot_path = os.path.join(screenshots_dir, f'screenshot_{frame_count:06d}.jpg')
-                            cv2.imwrite(screenshot_path, cropped_frame)
-                            screenshot_count += 1
-                            triggered_frames.append(frame_count)
-                            screenshot_distances.append(distance)
-                            print(f"\n在帧 {frame_count} 触发截图！已保存到 {screenshot_path} (距离: {distance:.1f}px)")
+                            if (frame_count - last_screenshot_frame) >= min_screenshot_interval:
+                                cropped_frame = crop_image(frame, crop_ratio)
+                                cropped_frame = compress_image(cropped_frame, quality)
+                                screenshot_path = os.path.join(screenshots_dir, f'screenshot_{frame_count:06d}.jpg')
+                                cv2.imwrite(screenshot_path, cropped_frame)
+                                screenshot_count += 1
+                                triggered_frames.append(frame_count)
+                                screenshot_distances.append(last_distance)
+                                last_screenshot_frame = frame_count
+                                # print(f"\n在帧 {frame_count} 触发截图！距离: {last_distance:.1f}px")
                             continue_long_dist_frame = 0
                     else:
                         continue_long_dist_frame = 0
-                        cv2.putText(annotated, f"Reset - Distance: {distance:.1f}px", 
-                                    (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-            else:
-                annotated = frame.copy()
-                cv2.putText(annotated, "Insufficient hands detected", 
-                            (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                continue_long_dist_frame = 0
+                        cv2.putText(annotated, f"Distance: {last_distance:.1f}px", 
+                                    (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
             
             frame_distance_log.append((frame_count, current_distance))
             
-            annotated = crop_image(annotated, crop_ratio)
             out.write(annotated)
             frame_count += 1
             pbar.update(1)
@@ -467,7 +524,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部距离计算器（自动截图）')
     parser.add_argument('--model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt', 
                         help='手部检测模型权重路径')
-    parser.add_argument('--source', type=str, default=r"E:\Download\travidebla.mp4", 
+    parser.add_argument('--source', type=str, default=r"E:\Download\展览会图录.mp4", 
                         help='源目录、图片路径或视频文件路径')
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
     parser.add_argument('--save-dir', type=str, default=None, 
@@ -478,7 +535,7 @@ if __name__ == '__main__':
                         help='触发截图的距离阈值（像素）')
     parser.add_argument('--stable-duration', type=float, default=1, 
                         help='触发截图所需的稳定时长（秒）')
-    parser.add_argument('--crop-ratio', type=float, default=0.2, 
+    parser.add_argument('--crop-ratio', type=float, default=0.15, 
                         help='图像两边向中央裁剪的总比例（默认0，即不裁剪）。例如0.3表示左右各裁剪15%，总共裁剪30%')
     parser.add_argument('--quality', type=int, default=80, 
                         help='图像/视频压缩质量（1-100，默认80，值越高质量越好文件越大）')
