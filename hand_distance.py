@@ -224,13 +224,16 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     filtered_dir = os.path.join(save_dir, os.path.splitext(video_name)[0])
     os.makedirs(filtered_dir, exist_ok=True)
     
-    print(f"\n正在复制去重后的截图到: {filtered_dir}")
+    print(f"\n正在转换去重后的截图为 JPG（质量={quality}）并保存到: {filtered_dir}")
+    jpeg_params = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
     for frame_num in filtered_frames:
         src_path = os.path.join(screenshots_dir, f'screenshot_{frame_num:06d}.png')
         if os.path.exists(src_path):
-            shutil.copy(src_path, os.path.join(filtered_dir, f'screenshot_{frame_num:06d}.png'))
-            print(f"  复制: screenshot_{frame_num:06d}.png")
-    print(f"已复制 {len(filtered_frames)} 张截图")
+            image = cv2.imread(src_path)
+            dst_path = os.path.join(filtered_dir, f'screenshot_{frame_num:06d}.jpg')
+            cv2.imwrite(dst_path, image, jpeg_params)
+            # print(f"  转换: screenshot_{frame_num:06d}.png -> .jpg")
+    print(f"已转换 {len(filtered_frames)} 张截图")
     
     avg_distance = np.mean(distances) if distances else None
     avg_screenshot_distance = np.mean(screenshot_distances) if screenshot_distances else None
