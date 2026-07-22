@@ -100,7 +100,7 @@ def orb_distance(image1, image2):
     
     return 1.0 - (len(good_matches) / max(len(kp1), len(kp2)))
 
-def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_threshold=0.7):
+def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_threshold=0.8):
     if len(triggered_frames) <= 1:
         return triggered_frames, []
     
