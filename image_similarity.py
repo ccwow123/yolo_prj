@@ -87,11 +87,11 @@ def filter_unique_images(input_dir, output_dir, threshold=0.7):
             
             if distance <= threshold:
                 removed_images.append(filename)
-                print(f"  Remove {filename} (similar to {last_kept}, distance={distance:.4f})")
+                # print(f"  Remove {filename} (similar to {last_kept}, distance={distance:.4f})")
             else:
                 unique_images.append(filename)
                 last_kept = filename
-                print(f"  Keep {filename} (different from {last_kept}, distance={distance:.4f})")
+                # print(f"  Keep {filename} (different from {last_kept}, distance={distance:.4f})")
     
     os.makedirs(output_dir, exist_ok=True)
     
@@ -161,13 +161,13 @@ if __name__ == '__main__':
     parser.add_argument('--compare', nargs=2, metavar=('IMAGE1', 'IMAGE2'),
                         help='Compare two images for similarity')
     
-    parser.add_argument('--filter-unique', type=str, default=r'E:\Files\yolo_prj\runs\hand_distance\exp7\screenshots',
+    parser.add_argument('--filter-unique', type=str, default=r'runs\hand_distance\exp3\screenshots',
                         help='Filter and save only unique images to output directory')
     
-    parser.add_argument('--threshold', type=float, default=0.7,
+    parser.add_argument('--threshold', type=float, default=0.8,
                         help='Distance threshold for similarity (0.0=identical, 1.0=completely different)')
     
-    parser.add_argument('--output', type=str, default=r'E:\Files\yolo_prj\runs\image_similarity\exp7',
+    parser.add_argument('--output', type=str, default=r'runs\hand_distance\exp3\filtered',
                         help='Output directory for results')
     
     args = parser.parse_args()
