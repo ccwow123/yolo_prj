@@ -7,6 +7,8 @@ import shutil
 from ultralytics import YOLO
 from tqdm import tqdm
 
+from image_similarity import orb_distance
+
 JPEG_QUALITY_PARAM = [int(cv2.IMWRITE_JPEG_QUALITY)]
 
 def get_next_exp_dir(base_dir='runs/hand_distance'):
@@ -85,20 +87,6 @@ def process_single_image(model, image_path, save_dir, save_txt, crop_ratio=0.3, 
             f.write(f"距离: {distance:.1f} 像素\n")
     
     print(f"已处理 {img_name}: {'距离 = {:.1f} px'.format(distance) if distance else '检测到少于2只手'}")
-
-def orb_distance(image1, image2):
-    orb = cv2.ORB_create(nfeatures=500)
-    
-    kp1, des1 = orb.detectAndCompute(cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY), None)
-    kp2, des2 = orb.detectAndCompute(cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY), None)
-    
-    if des1 is None or des2 is None or len(kp1) == 0 or len(kp2) == 0:
-        return 1.0
-    
-    matches = sorted(cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(des1, des2), key=lambda x: x.distance)
-    good_matches = [m for m in matches if m.distance < 50]
-    
-    return 1.0 - (len(good_matches) / max(len(kp1), len(kp2)))
 
 def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_threshold=0.8):
     if len(triggered_frames) <= 1:
@@ -219,7 +207,7 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     out.release()
     
     print("\n正在使用ORB相似度进行去重...")
-    filtered_frames, removed_frames = deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_threshold=0.7)
+    filtered_frames, removed_frames = deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_threshold=0.8)
     
     filtered_dir = os.path.join(save_dir, os.path.splitext(video_name)[0])
     os.makedirs(filtered_dir, exist_ok=True)
@@ -350,7 +338,7 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_thr
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部距离计算器（自动截图）')
     parser.add_argument('--model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt', help='手部检测模型权重路径')
-    parser.add_argument('--source', type=str, default=r"E:\Download\视频\恋上百合的101天.mp4", help='源目录、图片路径或视频文件路径')
+    parser.add_argument('--source', type=str, default=r"E:\Download\视频\餐.mp4", help='源目录、图片路径或视频文件路径')
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
     parser.add_argument('--save-dir', type=str, default=None, help='输出目录（未指定时自动递增）')
     parser.add_argument('--no-save-txt', action='store_true', help='不保存距离结果为txt文件')

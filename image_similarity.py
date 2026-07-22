@@ -4,7 +4,19 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-def orb_distance(image1, image2):
+def crop_center(image, ratio=0.5):
+    height, width = image.shape[:2]
+    new_width = int(width * ratio)
+    new_height = int(height * ratio)
+    start_x = (width - new_width) // 2
+    start_y = (height - new_height) // 2
+    return image[start_y:start_y+new_height, start_x:start_x+new_width]
+
+def orb_distance(image1, image2, use_center=False, center_ratio=0.5):
+    if use_center:
+        image1 = crop_center(image1, center_ratio)
+        image2 = crop_center(image2, center_ratio)
+    
     orb = cv2.ORB_create(nfeatures=500)
     
     gray1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
@@ -33,18 +45,18 @@ def orb_distance(image1, image2):
     
     return 1.0 - similarity
 
-def compare_images(img_path1, img_path2, threshold=0.7):
+def compare_images(img_path1, img_path2, threshold=0.7, use_center=False, center_ratio=0.5):
     img1 = cv2.imread(img_path1)
     img2 = cv2.imread(img_path2)
     
     if img1 is None:
-        print(f"Error: Cannot read image {img_path1}")
+        print(f"错误：无法读取图片 {img_path1}")
         return None
     if img2 is None:
-        print(f"Error: Cannot read image {img_path2}")
+        print(f"错误：无法读取图片 {img_path2}")
         return None
     
-    distance = orb_distance(img1, img2)
+    distance = orb_distance(img1, img2, use_center, center_ratio)
     similarity = 100.0 * (1 - distance)
     
     return {
@@ -53,18 +65,20 @@ def compare_images(img_path1, img_path2, threshold=0.7):
         'is_similar': distance <= threshold
     }
 
-def filter_unique_images(input_dir, output_dir, threshold=0.7):
+def filter_unique_images(input_dir, output_dir, threshold=0.7, use_center=False, center_ratio=0.5):
     image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')
     files = sorted([f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f)) and f.lower().endswith(image_extensions)])
     
-    print(f"Found {len(files)} images in input directory")
+    print(f"在输入目录中找到 {len(files)} 张图片")
+    if use_center:
+        print(f"使用中心区域检测，比例: {center_ratio}")
     
     if len(files) == 0:
-        print("No images found")
+        print("未找到图片")
         return [], []
     
     images = {}
-    for filename in tqdm(files, desc="Loading images", unit="image"):
+    for filename in tqdm(files, desc="正在加载图片", unit="张"):
         filepath = os.path.join(input_dir, filename)
         img = cv2.imread(filepath)
         if img is not None:
@@ -77,13 +91,13 @@ def filter_unique_images(input_dir, output_dir, threshold=0.7):
         unique_images.append(files[0])
         last_kept = files[0]
         
-        for filename in tqdm(files[1:], desc="Comparing images", unit="image"):
+        for filename in tqdm(files[1:], desc="正在比较图片", unit="张"):
             if last_kept not in images or filename not in images:
                 unique_images.append(filename)
                 last_kept = filename
                 continue
                 
-            distance = orb_distance(images[last_kept], images[filename])
+            distance = orb_distance(images[last_kept], images[filename], use_center, center_ratio)
             
             if distance <= threshold:
                 removed_images.append(filename)
@@ -108,72 +122,78 @@ def filter_unique_images(input_dir, output_dir, threshold=0.7):
     
     txt_path = os.path.join(output_dir, 'filter_report.txt')
     with open(txt_path, 'w') as f:
-        f.write(f"Algorithm: ORB\n")
-        f.write(f"Threshold: {threshold}\n")
-        f.write(f"Total images processed: {len(files)}\n")
-        f.write(f"Unique images saved: {len(unique_images)}\n")
-        f.write(f"Images removed: {len(removed_images)}\n")
+        f.write(f"算法: ORB\n")
+        f.write(f"阈值: {threshold}\n")
+        f.write(f"处理图片总数: {len(files)}\n")
+        f.write(f"去重后保存: {len(unique_images)}\n")
+        f.write(f"已移除图片: {len(removed_images)}\n")
         
         if removed_images:
-            f.write("\nRemoved images (similar to previous):\n")
+            f.write("\n已移除的图片（与前一张相似）:\n")
             for filename in removed_images:
                 f.write(f"  {filename}\n")
         
-        f.write("\nKept images:\n")
+        f.write("\n保留的图片:\n")
         for filename in unique_images:
             f.write(f"  {filename}\n")
     
-    print(f"\n=== Filter Complete ===")
-    print(f"Algorithm: ORB")
-    print(f"Threshold: {threshold}")
-    print(f"Total images processed: {len(files)}")
-    print(f"Unique images saved: {len(unique_images)}")
-    print(f"Images removed: {len(removed_images)}")
-    print(f"Results saved to: {output_dir}")
+    print(f"\n=== 去重完成 ===")
+    print(f"算法: ORB")
+    print(f"阈值: {threshold}")
+    print(f"处理图片总数: {len(files)}")
+    print(f"去重后保存: {len(unique_images)}")
+    print(f"已移除图片: {len(removed_images)}")
+    print(f"结果保存到: {output_dir}")
     
     return unique_images, removed_images
 
 def run_similarity_check(args):
     if args.compare:
         if len(args.compare) != 2:
-            print("Please provide exactly 2 images for comparison")
+            print("请提供恰好两张图片进行比较")
             return
         
-        result = compare_images(args.compare[0], args.compare[1], args.threshold)
+        result = compare_images(args.compare[0], args.compare[1], args.threshold, args.use_center, args.center_ratio)
         if result:
-            print(f"\nComparison Result:")
-            print(f"Image 1: {args.compare[0]}")
-            print(f"Image 2: {args.compare[1]}")
-            print(f"Distance: {result['distance']:.4f}")
-            print(f"Similarity: {result['similarity']:.2f}%")
-            print(f"Is Similar: {result['is_similar']}")
+            print(f"\n比较结果:")
+            print(f"图片1: {args.compare[0]}")
+            print(f"图片2: {args.compare[1]}")
+            print(f"距离: {result['distance']:.4f}")
+            print(f"相似度: {result['similarity']:.2f}%")
+            print(f"是否相似: {result['is_similar']}")
     
     elif args.filter_unique:
         if not args.output:
-            print("Please specify --output directory for filtered images")
+            print("请指定 --output 输出目录")
             return
         
-        filter_unique_images(args.filter_unique, args.output, args.threshold)
+        filter_unique_images(args.filter_unique, args.output, args.threshold, args.use_center, args.center_ratio)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Image Similarity Detection using ORB Algorithm')
+    parser = argparse.ArgumentParser(description='使用 ORB 算法进行图片相似度检测')
     
-    parser.add_argument('--compare', nargs=2, metavar=('IMAGE1', 'IMAGE2'),
-                        help='Compare two images for similarity')
+    parser.add_argument('--compare', nargs=2, metavar=('图片1', '图片2'),
+                        help='比较两张图片的相似度')
     
-    parser.add_argument('--filter-unique', type=str, default=r'runs\hand_distance\exp3\screenshots',
-                        help='Filter and save only unique images to output directory')
+    parser.add_argument('--filter-unique', type=str, default=r'runs\hand_distance\exp6\screenshots',
+                        help='输入图片目录')
     
     parser.add_argument('--threshold', type=float, default=0.8,
-                        help='Distance threshold for similarity (0.0=identical, 1.0=completely different)')
+                        help='相似度距离阈值 (0.0=完全相同, 1.0=完全不同)')
     
-    parser.add_argument('--output', type=str, default=r'runs\hand_distance\exp3\filtered',
-                        help='Output directory for results')
+    parser.add_argument('--output', type=str, default=r'runs\hand_distance\exp6\filtered',
+                        help='结果输出目录')
+    
+    parser.add_argument('--use-center', action='store_true',
+                        help='使用图片中心区域进行相似度检测')
+    
+    parser.add_argument('--center-ratio', type=float, default=0.5,
+                        help='中心区域比例，默认0.5表示使用宽高各一半的中心区域')
     
     args = parser.parse_args()
     
     if not (args.compare or args.filter_unique):
         parser.print_help()
-        print("\nPlease specify one of: --compare or --filter-unique")
+        print("\n请指定以下参数之一: --compare 或 --filter-unique")
     else:
         run_similarity_check(args)
