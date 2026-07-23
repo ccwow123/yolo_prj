@@ -8,7 +8,8 @@ model = YOLO("ul://ultralytics/yolo26/yolo26n")
 model.train(
     data="ul://lemon/datasets/cbook",
     epochs=100,
-    project="username/my-project",
-    name="lemon/v2i",
+    project="lemon/my-project",
+    name="v2i-3",
+    workers=0,
 )
 # Metrics stream to Platform automatically

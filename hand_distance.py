@@ -8,18 +8,9 @@ from ultralytics import YOLO
 from tqdm import tqdm
 
 from image_similarity import orb_distance
+from utils import get_next_exp_dir, is_video_file, validate_parameters
 
 JPEG_QUALITY_PARAM = [int(cv2.IMWRITE_JPEG_QUALITY)]
-
-def get_next_exp_dir(base_dir='runs/hand_distance'):
-    os.makedirs(base_dir, exist_ok=True)
-    existing_dirs = [d for d in os.listdir(base_dir) if d.startswith('exp')]
-    
-    if not existing_dirs:
-        return os.path.join(base_dir, 'exp')
-    
-    max_num = max([int(d[3:]) if d[3:].isdigit() else 1 for d in existing_dirs if d.startswith('exp')])
-    return os.path.join(base_dir, f'exp{max_num + 1}') if max_num > 0 else os.path.join(base_dir, 'exp')
 
 def calculate_hand_distance(image, boxes):
     if len(boxes) < 2:
@@ -259,25 +250,15 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     if avg_screenshot_distance:
         print(f"\n=== 截图时双手距离统计 ===\n截图时平均距离: {avg_screenshot_distance:.1f} px\n图像宽度: {width} px\n画册所占比例:{album_ratio * 100:.2f}%,建议剪裁比例为({1-album_ratio:.2f})\n")
 
-def validate_parameters(crop_ratio, quality, distance_threshold, stable_duration, conf):
-    errors = []
-    if not (0 <= crop_ratio < 1):
-        errors.append(f"裁剪比例 crop_ratio 必须在 [0, 1) 范围内，当前值: {crop_ratio}")
-    if not (1 <= quality <= 100):
-        errors.append(f"压缩质量 quality 必须在 [1, 100] 范围内，当前值: {quality}")
-    if distance_threshold < 0:
-        errors.append(f"距离阈值 distance_threshold 必须大于等于0，当前值: {distance_threshold}")
-    if stable_duration <= 0:
-        errors.append(f"稳定时长 stable_duration 必须大于0，当前值: {stable_duration}")
-    if not (0 <= conf <= 1):
-        errors.append(f"置信度 conf 必须在 [0, 1] 范围内，当前值: {conf}")
-    return errors
-
-def is_video_file(filepath):
-    return filepath.lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.flv', '.webm'))
-
 def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_threshold=1400, stable_duration=1.0, crop_ratio=0.3, quality=80):
-    errors = validate_parameters(crop_ratio, quality, distance_threshold, stable_duration, conf)
+    params = {
+        'crop_ratio': crop_ratio,
+        'quality': quality,
+        'distance_threshold': distance_threshold,
+        'stable_duration': stable_duration,
+        'conf': conf
+    }
+    errors = validate_parameters(params)
     if errors:
         print("参数校验失败:")
         for error in errors:
@@ -340,7 +321,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt', help='手部检测模型权重路径')
     parser.add_argument('--source', type=str, default=r"E:\Download\视频\餐.mp4", help='源目录、图片路径或视频文件路径')
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
-    parser.add_argument('--save-dir', type=str, default=None, help='输出目录（未指定时自动递增）')
+    parser.add_argument('--save-dir', type=str, default='runs\hand_distance', help='输出目录（未指定时自动递增）')
     parser.add_argument('--no-save-txt', action='store_true', help='不保存距离结果为txt文件')
     parser.add_argument('--distance-threshold', type=int, default=1500, help='触发截图的距离阈值（像素）')
     parser.add_argument('--stable-duration', type=float, default=2, help='触发截图所需的稳定时长（秒）')

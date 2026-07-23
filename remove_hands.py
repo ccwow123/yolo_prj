@@ -5,14 +5,7 @@ import numpy as np
 from ultralytics import YOLO
 from tqdm import tqdm
 
-def get_next_exp_dir(base_dir):
-    os.makedirs(base_dir, exist_ok=True)
-    exp_num = 0
-    while True:
-        exp_dir = os.path.join(base_dir, f"exp{exp_num}" if exp_num > 0 else "exp")
-        if not os.path.exists(exp_dir):
-            return exp_dir
-        exp_num += 1
+from utils import get_next_exp_dir
 
 def remove_hands(image_path, model, conf=0.4, book_width_ratio=0.0, min_area=5000, 
                  max_area=100000, aspect_ratio_range=(0.3, 3.0), visualize_mask=False):
