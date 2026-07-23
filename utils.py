@@ -1,4 +1,5 @@
 import os
+import json
 
 
 def get_next_exp_dir(base_dir='runs/exp'):
@@ -67,7 +68,7 @@ def get_files_by_extension(directory, extensions):
     return sorted(files)
 
 
-def save_detection_results(result, save_dir, filename, save_txt=False):
+def save_detection_results(result, save_dir, filename, save_json=False):
     """
     保存检测结果到文件
     
@@ -75,26 +76,47 @@ def save_detection_results(result, save_dir, filename, save_txt=False):
         result: YOLO检测结果对象
         save_dir: 保存目录
         filename: 文件名
-        save_txt: 是否保存txt标注文件
+        save_json: 是否保存json标注文件
     
     Returns:
-        None
+        dict: 检测结果数据（用于汇总），如果没有检测结果返回None
     """
     os.makedirs(save_dir, exist_ok=True)
     
     # 保存图片结果
     result.save(os.path.join(save_dir, filename))
     
-    # 保存txt标注
-    if save_txt and result.boxes is not None:
-        txt_path = os.path.join(save_dir, os.path.splitext(filename)[0] + '.txt')
-        with open(txt_path, 'w') as f:
-            for box in result.boxes:
-                cls = int(box.cls)
-                conf = float(box.conf)
-                xywh = box.xywh[0].tolist()
-                line = f"{cls} {xywh[0]} {xywh[1]} {xywh[2]} {xywh[3]} {conf}\n"
-                f.write(line)
+    # 准备检测结果数据
+    data = {
+        "image_filename": filename,
+        "detection_count": 0,
+        "detections": []
+    }
+    
+    # 保存json标注
+    if save_json and result.boxes is not None and len(result.boxes) > 0:
+        json_path = os.path.join(save_dir, os.path.splitext(filename)[0] + '.json')
+        detections = []
+        for box in result.boxes:
+            cls = int(box.cls)
+            conf = float(box.conf)
+            xywh = box.xywh[0].tolist()
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            detections.append({
+                "class_id": cls,
+                "class_name": result.names[cls] if hasattr(result, 'names') else "unknown",
+                "confidence": conf,
+                "bbox_xywh": xywh,
+                "bbox_xyxy": [x1, y1, x2, y2]
+            })
+        
+        data["detection_count"] = len(detections)
+        data["detections"] = detections
+        
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    
+    return data
 
 
 def validate_parameters(params):
