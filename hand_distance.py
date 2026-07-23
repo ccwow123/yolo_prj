@@ -291,7 +291,7 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_thr
         print(f"模型加载失败: {e}")
         return
     
-    save_dir = save_dir or get_next_exp_dir()
+    save_dir = get_next_exp_dir(save_dir) if save_dir else get_next_exp_dir('runs/hand_distance')
     os.makedirs(save_dir, exist_ok=True)
     print(f"结果将保存到: {save_dir}")
     

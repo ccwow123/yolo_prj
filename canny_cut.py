@@ -6,6 +6,7 @@ import argparse
 # Global variables for interactive mode
 img = None
 window_name = "Comic Book Rectification"
+crop_ratio = 0.2
 
 params = {
     'blur': 5,
@@ -18,7 +19,7 @@ params = {
     'max_area': 1000000
 }
 
-def crop_sides(image, crop_ratio=0.2):
+def crop_sides(image, crop_ratio=0.0):
     h, w = image.shape[:2]
     crop_width = int(w * crop_ratio / 2)
     if crop_width > 0:
@@ -74,14 +75,11 @@ def rectify_book(image, corners):
     rect[1] = pts[np.argmin(diff)]
     rect[3] = pts[np.argmax(diff)]
     
-    maxW = max(int(np.sqrt(((rect[2][0]-rect[3][0])**2) + ((rect[2][1]-rect[3][1])**2))),
-               int(np.sqrt(((rect[1][0]-rect[0][0])**2) + ((rect[1][1]-rect[0][1])**2))))
-    maxH = max(int(np.sqrt(((rect[1][0]-rect[2][0])**2) + ((rect[1][1]-rect[2][1])**2))),
-               int(np.sqrt(((rect[0][0]-rect[3][0])**2) + ((rect[0][1]-rect[3][1])**2))))
+    h, w = image.shape[:2]
     
-    dst = np.array([[0, 0], [maxW-1, 0], [maxW-1, maxH-1], [0, maxH-1]], dtype="float32")
+    dst = np.array([[0, 0], [w-1, 0], [w-1, h-1], [0, h-1]], dtype="float32")
     M = cv2.getPerspectiveTransform(rect, dst)
-    warp = cv2.warpPerspective(image, M, (maxW, maxH))
+    warp = cv2.warpPerspective(image, M, (w, h))
     
     return warp
 
@@ -93,7 +91,7 @@ def update_display():
     if img is None:
         return
     
-    cropped_img = crop_sides(img, 0.2)
+    cropped_img = crop_sides(img, crop_ratio)
     corners, edges, contours = detect_corners(cropped_img)
     
     vis = cropped_img.copy()
@@ -154,8 +152,9 @@ def init_trackbars():
     cv2.createTrackbar("Max Area", "Controls", params['max_area'] // 10000, 100, 
                        lambda v: update_param('max_area', v * 10000))
 
-def interactive_mode(image_path, output_path):
-    global img
+def interactive_mode(image_path, output_path, ratio=0.2):
+    global img, crop_ratio
+    crop_ratio = ratio
     
     if not os.path.isfile(image_path):
         print(f"Error: File not found - {image_path}")
@@ -184,20 +183,26 @@ def interactive_mode(image_path, output_path):
             cv2.destroyAllWindows()
             return
         elif key == ord('s'):
-            cropped_img = crop_sides(img, 0.2)
+            cropped_img = crop_sides(img, crop_ratio)
             corners, _, _ = detect_corners(cropped_img)
             
             if corners is not None:
                 warp = rectify_book(cropped_img, corners)
-                cv2.imwrite(output_path, warp)
-                print(f"\nSaved to: {output_path}")
+                
+                save_path = output_path
+                _, ext = os.path.splitext(save_path)
+                if not ext.lower() in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff'):
+                    save_path = save_path + '.jpg'
+                
+                cv2.imwrite(save_path, warp)
+                print(f"\nSaved to: {save_path}")
                 print(f"Output size: {warp.shape[1]}x{warp.shape[0]}")
             else:
                 print("\nFailed: No 4 corners detected")
     
     cv2.destroyAllWindows()
 
-def batch_process(input_dir, output_dir):
+def batch_process(input_dir, output_dir, ratio=0.2):
     image_extensions = ('.jpg', '.jpeg', '.png', '.bmp')
     files = sorted([f for f in os.listdir(input_dir) 
                    if os.path.isfile(os.path.join(input_dir, f)) 
@@ -209,7 +214,7 @@ def batch_process(input_dir, output_dir):
     
     os.makedirs(output_dir, exist_ok=True)
     
-    print(f"Processing {len(files)} images...")
+    print(f"Processing {len(files)} images (crop ratio: {ratio})...")
     
     for filename in files:
         input_path = os.path.join(input_dir, filename)
@@ -221,7 +226,7 @@ def batch_process(input_dir, output_dir):
             print(f"  ✗ {filename} - Cannot read")
             continue
         
-        cropped_img = crop_sides(image, 0.2)
+        cropped_img = crop_sides(image, ratio)
         corners, _, _ = detect_corners(cropped_img)
         
         if corners is not None:
@@ -233,9 +238,10 @@ def batch_process(input_dir, output_dir):
 
 def main():
     parser = argparse.ArgumentParser(description='Comic Book Page Rectification')
-    parser.add_argument('--input', type=str, default='./runs/remove_hands/exp/screenshot_000245_nohand.png', help='Input image or directory')
-    parser.add_argument('--output', type=str, default='./output', help='Output path or directory')
-    parser.add_argument('--tune', action='store_true', help='Interactive parameter tuning')
+    parser.add_argument('--input', type=str, default = r'C:\Users\Administrator\Desktop\1.png', help='Input image or directory')
+    parser.add_argument('--output', type=str, default='./runs/output', help='Output path or directory')
+    parser.add_argument('--tune', default='True', help='Interactive parameter tuning')
+    parser.add_argument('--crop', type=float, default=0, help='Side crop ratio (0.0 = no crop, 0.5 = crop half)')
     
     args = parser.parse_args()
     
@@ -243,31 +249,37 @@ def main():
         if os.path.isdir(args.input):
             files = [f for f in os.listdir(args.input) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
             if files:
-                interactive_mode(os.path.join(args.input, files[0]), args.output)
+                interactive_mode(os.path.join(args.input, files[0]), args.output, args.crop)
             else:
                 print("No images found in input directory")
         else:
-            interactive_mode(args.input, args.output)
+            interactive_mode(args.input, args.output, args.crop)
         return
     
     if os.path.isdir(args.input):
-        batch_process(args.input, args.output)
+        batch_process(args.input, args.output, args.crop)
     else:
         image = cv2.imread(args.input)
         if image is None:
             print(f"Error: Cannot read image - {args.input}")
             return
         
-        cropped_img = crop_sides(image, 0.2)
+        cropped_img = crop_sides(image, args.crop)
         corners, _, _ = detect_corners(cropped_img)
         
         if corners is not None:
             warp = rectify_book(cropped_img, corners)
-            output_dir = os.path.dirname(args.output)
+            
+            output_path = args.output
+            _, ext = os.path.splitext(output_path)
+            if not ext.lower() in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff'):
+                output_path = output_path + '.jpg'
+            
+            output_dir = os.path.dirname(output_path)
             if output_dir:
                 os.makedirs(output_dir, exist_ok=True)
-            cv2.imwrite(args.output, warp)
-            print(f"Successfully saved to: {args.output}")
+            cv2.imwrite(output_path, warp)
+            print(f"Successfully saved to: {output_path}")
             print(f"Output size: {warp.shape[1]}x{warp.shape[0]}")
         else:
             print("Failed: No 4 corners detected. Try using --tune to adjust parameters.")

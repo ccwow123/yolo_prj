@@ -9,29 +9,15 @@ def get_next_exp_dir(base_dir='runs/exp'):
         base_dir: 基础目录路径
     
     Returns:
-        下一个实验目录的完整路径
+        下一个实验目录的完整路径，格式为 base_dir/exp 或 base_dir/exp1, exp2...
     """
     os.makedirs(base_dir, exist_ok=True)
-    existing_dirs = [d for d in os.listdir(base_dir) if d.startswith('exp')]
-    
-    if not existing_dirs:
-        return os.path.join(base_dir, 'exp')
-    
-    max_num = 0
-    for d in existing_dirs:
-        if d == 'exp':
-            num = 1
-        elif d.startswith('exp') and d[3:].isdigit():
-            num = int(d[3:])
-        else:
-            continue
-        if num > max_num:
-            max_num = num
-    
-    if max_num == 0:
-        return os.path.join(base_dir, 'exp')
-    else:
-        return os.path.join(base_dir, f'exp{max_num + 1}')
+    exp_num = 0
+    while True:
+        exp_dir = os.path.join(base_dir, f"exp{exp_num}" if exp_num > 0 else "exp")
+        if not os.path.exists(exp_dir):
+            return exp_dir
+        exp_num += 1
 
 
 def is_video_file(filepath):

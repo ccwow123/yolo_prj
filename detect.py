@@ -81,7 +81,9 @@ def run_video_detection(model_path, source, conf, save_dir, save_txt):
 
 def run_detection(model_path, source, conf, save_dir, save_txt):
     if save_dir is None:
-        save_dir = get_next_exp_dir()
+        save_dir = get_next_exp_dir('runs/detect')
+    else:
+        save_dir = get_next_exp_dir(save_dir)
     
     os.makedirs(save_dir, exist_ok=True)
     print(f"Results will be saved to: {save_dir}")
