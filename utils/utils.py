@@ -87,9 +87,14 @@ def save_detection_results(result, save_dir, filename, save_json=False, save_ann
     
     # 保存图片结果
     if save_annotated:
+        # 使用YOLO自带的保存方法，保持颜色正确
         result.save(os.path.join(save_dir, filename))
     else:
-        cv2.imwrite(os.path.join(save_dir, filename), cv2.cvtColor(result.orig_img, cv2.COLOR_RGB2BGR))
+        # 直接保存原始图像，避免颜色空间转换问题
+        # YOLO的orig_img是RGB格式，使用PIL保存更可靠
+        from PIL import Image
+        img = Image.fromarray(result.orig_img)
+        img.save(os.path.join(save_dir, filename))
     
     # 准备检测结果数据
     data = {
