@@ -7,6 +7,59 @@ from tqdm import tqdm
 
 from utils import get_next_exp_dir, is_video_file, save_detection_results
 
+def detect_single_frame(model, frame, conf, save_dir=None, filename=None, save_json=False, save_annotated=True):
+    """
+    检测单帧图像（公共函数）
+    
+    Args:
+        model: YOLO模型对象
+        frame: 图像帧（numpy数组）或图像路径
+        conf: 置信度阈值
+        save_dir: 保存目录（可选）
+        filename: 保存文件名（可选）
+        save_json: 是否保存json
+        save_annotated: 是否保存带检测框的图像
+    
+    Returns:
+        dict: 检测结果数据
+        numpy.ndarray: 标注后的图像（如果需要）
+    """
+    results = model(frame, conf=conf, save=False, verbose=False)
+    result = results[0]
+    
+    data = {
+        "image_filename": filename,
+        "detection_count": 0,
+        "detections": []
+    }
+    
+    if result.boxes is not None and len(result.boxes) > 0:
+        detections = []
+        for box in result.boxes:
+            cls = int(box.cls)
+            conf_val = float(box.conf)
+            xywh = box.xywh[0].tolist()
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            detections.append({
+                "class_id": cls,
+                "confidence": conf_val,
+                "bbox_xywh": xywh,
+                "bbox_xyxy": [x1, y1, x2, y2]
+            })
+        
+        data["detection_count"] = len(detections)
+        data["detections"] = detections
+        
+        if save_dir and filename and save_json:
+            json_path = os.path.join(save_dir, os.path.splitext(filename)[0] + '.json')
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+    
+    if save_dir and filename:
+        save_detection_results(result, save_dir, filename, save_json, save_annotated)
+    
+    return data, result.plot()
+
 def run_image_detection(model_path, source, conf, save_dir, save_json, save_annotated=True):
     """
     运行图像检测
@@ -62,43 +115,12 @@ def run_video_detection(model_path, source, conf, save_dir, save_json, save_anno
             if not ret:
                 break
             
-            results = model(
-                frame,
-                conf=conf,
-                save=False,
-                verbose=False
+            frame_data, annotated_frame = detect_single_frame(
+                model, frame, conf, 
+                save_dir=save_dir if save_json else None,
+                filename=f'frame_{frame_count:04d}.jpg' if save_json else None,
+                save_json=save_json
             )
-            
-            result = results[0]
-            annotated_frame = result.plot()
-            
-            frame_data = {
-                "image_filename": f'frame_{frame_count:04d}.jpg',
-                "detection_count": 0,
-                "detections": []
-            }
-            
-            if result.boxes is not None and len(result.boxes) > 0:
-                detections = []
-                for box in result.boxes:
-                    cls = int(box.cls)
-                    conf_val = float(box.conf)
-                    xywh = box.xywh[0].tolist()
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    detections.append({
-                        "class_id": cls,
-                        "confidence": conf_val,
-                        "bbox_xywh": xywh,
-                        "bbox_xyxy": [x1, y1, x2, y2]
-                    })
-                
-                frame_data["detection_count"] = len(detections)
-                frame_data["detections"] = detections
-                
-                if save_json:
-                    json_path = os.path.join(save_dir, f'frame_{frame_count:04d}.json')
-                    with open(json_path, 'w', encoding='utf-8') as f:
-                        json.dump(frame_data, f, indent=2, ensure_ascii=False)
             
             video_results.append(frame_data)
             out.write(annotated_frame)
@@ -185,8 +207,10 @@ if __name__ == '__main__':
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
     parser.add_argument('--save-dir', type=str, default='runs\detections', help='结果保存目录')
     parser.add_argument('--save-json', default=False, action='store_true', help='保存单个检测json文件（summary.json始终保存）')
+    parser.add_argument('--save-annotated', default=True, action='store_true', help='保存带检测框的图片（默认启用）')
+    parser.add_argument('--no-annotated', dest='save_annotated', action='store_false', help='保存原图，不带检测框')
     
     args = parser.parse_args()
     
     print(f"使用模型: {args.model}")
-    run_detection(args.model, args.source, args.conf, args.save_dir, args.save_json)
+    run_detection(args.model, args.source, args.conf, args.save_dir, args.save_json, args.save_annotated)
