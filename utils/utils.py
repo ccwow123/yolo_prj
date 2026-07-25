@@ -1,5 +1,6 @@
 import os
 import json
+import cv2
 
 
 def get_next_exp_dir(base_dir='runs/exp'):
@@ -68,7 +69,7 @@ def get_files_by_extension(directory, extensions):
     return sorted(files)
 
 
-def save_detection_results(result, save_dir, filename, save_json=False):
+def save_detection_results(result, save_dir, filename, save_json=False, save_annotated=True):
     """
     保存检测结果到文件
     
@@ -76,7 +77,8 @@ def save_detection_results(result, save_dir, filename, save_json=False):
         result: YOLO检测结果对象
         save_dir: 保存目录
         filename: 文件名
-        save_json: 是否保存json标注文件
+        save_json: 是否保存单个json标注文件（汇总json始终保存）
+        save_annotated: 是否保存带检测框的图片，False则保存原图
     
     Returns:
         dict: 检测结果数据（用于汇总），如果没有检测结果返回None
@@ -84,7 +86,10 @@ def save_detection_results(result, save_dir, filename, save_json=False):
     os.makedirs(save_dir, exist_ok=True)
     
     # 保存图片结果
-    result.save(os.path.join(save_dir, filename))
+    if save_annotated:
+        result.save(os.path.join(save_dir, filename))
+    else:
+        cv2.imwrite(os.path.join(save_dir, filename), cv2.cvtColor(result.orig_img, cv2.COLOR_RGB2BGR))
     
     # 准备检测结果数据
     data = {
@@ -93,7 +98,7 @@ def save_detection_results(result, save_dir, filename, save_json=False):
         "detections": []
     }
     
-    # 保存json标注
+    # 保存单个json标注（仅当save_json=True时）
     if save_json and result.boxes is not None and len(result.boxes) > 0:
         json_path = os.path.join(save_dir, os.path.splitext(filename)[0] + '.json')
         detections = []
@@ -115,6 +120,24 @@ def save_detection_results(result, save_dir, filename, save_json=False):
         
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+    elif result.boxes is not None and len(result.boxes) > 0:
+        # 不保存单个json，但仍收集检测数据用于汇总
+        detections = []
+        for box in result.boxes:
+            cls = int(box.cls)
+            conf = float(box.conf)
+            xywh = box.xywh[0].tolist()
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            detections.append({
+                "class_id": cls,
+                "class_name": result.names[cls] if hasattr(result, 'names') else "unknown",
+                "confidence": conf,
+                "bbox_xywh": xywh,
+                "bbox_xyxy": [x1, y1, x2, y2]
+            })
+        
+        data["detection_count"] = len(detections)
+        data["detections"] = detections
     
     return data
 

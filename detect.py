@@ -7,7 +7,10 @@ from tqdm import tqdm
 
 from utils import get_next_exp_dir, is_video_file, save_detection_results
 
-def run_image_detection(model_path, source, conf, save_dir, save_json):
+def run_image_detection(model_path, source, conf, save_dir, save_json, save_annotated=True):
+    """
+    运行图像检测
+    """
     model = YOLO(model_path).to('cuda')
     model.eval()
     
@@ -18,20 +21,23 @@ def run_image_detection(model_path, source, conf, save_dir, save_json):
         verbose=False
     )
     
-    print("Saving detection results...")
-    for result in tqdm(results, desc="Processing images", unit="image"):
+    print("正在保存检测结果...")
+    for result in tqdm(results, desc="处理图像", unit="张"):
         img_name = os.path.basename(result.path)
-        save_detection_results(result, save_dir, img_name, save_json)
+        save_detection_results(result, save_dir, img_name, save_json, save_annotated)
     
-    print(f"\nAll results saved to {save_dir}")
+    print(f"\n所有结果已保存到 {save_dir}")
 
-def run_video_detection(model_path, source, conf, save_dir, save_json):
+def run_video_detection(model_path, source, conf, save_dir, save_json, save_annotated=True):
+    """
+    运行视频检测
+    """
     model = YOLO(model_path).to('cuda')
     model.eval()
     
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
-        print(f"Error: Cannot open video file {source}")
+        print(f"错误：无法打开视频文件 {source}")
         return []
     
     fps = int(cap.get(cv2.CAP_PROP_FPS))
@@ -46,11 +52,10 @@ def run_video_detection(model_path, source, conf, save_dir, save_json):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
     
-    # 收集视频帧的检测结果
     video_results = []
     
-    print(f"Processing video: {video_name}")
-    with tqdm(total=total_frames, desc="Processing frames", unit="frame") as pbar:
+    print(f"正在处理视频: {video_name}")
+    with tqdm(total=total_frames, desc="处理帧", unit="帧") as pbar:
         frame_count = 0
         while cap.isOpened():
             ret, frame = cap.read()
@@ -73,8 +78,7 @@ def run_video_detection(model_path, source, conf, save_dir, save_json):
                 "detections": []
             }
             
-            if save_json and result.boxes is not None:
-                json_path = os.path.join(save_dir, f'frame_{frame_count:04d}.json')
+            if result.boxes is not None and len(result.boxes) > 0:
                 detections = []
                 for box in result.boxes:
                     cls = int(box.cls)
@@ -91,8 +95,10 @@ def run_video_detection(model_path, source, conf, save_dir, save_json):
                 frame_data["detection_count"] = len(detections)
                 frame_data["detections"] = detections
                 
-                with open(json_path, 'w', encoding='utf-8') as f:
-                    json.dump(frame_data, f, indent=2, ensure_ascii=False)
+                if save_json:
+                    json_path = os.path.join(save_dir, f'frame_{frame_count:04d}.json')
+                    with open(json_path, 'w', encoding='utf-8') as f:
+                        json.dump(frame_data, f, indent=2, ensure_ascii=False)
             
             video_results.append(frame_data)
             out.write(annotated_frame)
@@ -101,61 +107,63 @@ def run_video_detection(model_path, source, conf, save_dir, save_json):
     
     cap.release()
     out.release()
-    print(f"\nVideo detection completed. Output saved to {output_video_path}")
+    print(f"\n视频检测完成。输出已保存到 {output_video_path}")
     
     return video_results
 
-def run_detection(model_path, source, conf, save_dir, save_json):
+def run_detection(model_path, source, conf, save_dir, save_json, save_annotated=True):
+    """
+    运行检测主函数
+    """
     if save_dir is None:
         save_dir = get_next_exp_dir('runs/detect')
     else:
         save_dir = get_next_exp_dir(save_dir)
     
     os.makedirs(save_dir, exist_ok=True)
-    print(f"Results will be saved to: {save_dir}")
+    print(f"结果将保存到: {save_dir}")
     
-    # 收集所有检测结果用于汇总
     all_results = []
     
     if os.path.isfile(source):
         if is_video_file(source):
-            video_results = run_video_detection(model_path, source, conf, save_dir, save_json)
+            video_results = run_video_detection(model_path, source, conf, save_dir, save_json, save_annotated)
             if video_results:
                 all_results.extend(video_results)
         else:
-            print(f"Processing single image: {os.path.basename(source)}")
+            print(f"处理单张图像: {os.path.basename(source)}")
             model = YOLO(model_path)
             results = model(source, conf=conf, save=False, verbose=False)
-            img_results = save_detection_results(results[0], save_dir, os.path.basename(source), save_json)
+            img_results = save_detection_results(results[0], save_dir, os.path.basename(source), save_json, save_annotated)
             if img_results:
                 all_results.append(img_results)
-            print(f"Saved result for {os.path.basename(source)}")
+            print(f"已保存 {os.path.basename(source)} 的结果")
     
     elif os.path.isdir(source):
         files = [f for f in os.listdir(source) if os.path.isfile(os.path.join(source, f))]
         
-        with tqdm(total=len(files), desc="Processing files", unit="file") as pbar:
+        with tqdm(total=len(files), desc="处理文件", unit="个") as pbar:
             for filename in files:
                 filepath = os.path.join(source, filename)
                 if is_video_file(filepath):
-                    video_results = run_video_detection(model_path, filepath, conf, save_dir, save_json)
+                    video_results = run_video_detection(model_path, filepath, conf, save_dir, save_json, save_annotated)
                     if video_results:
                         all_results.extend(video_results)
                 else:
                     model = YOLO(model_path)
                     results = model(filepath, conf=conf, save=False, verbose=False)
-                    img_results = save_detection_results(results[0], save_dir, filename, save_json)
+                    img_results = save_detection_results(results[0], save_dir, filename, save_json, save_annotated)
                     if img_results:
                         all_results.append(img_results)
                 pbar.update(1)
-        print(f"\nAll files processed. Results saved to {save_dir}")
+        print(f"\n所有文件处理完成。结果已保存到 {save_dir}")
     
     else:
-        print(f"Error: Source {source} not found")
+        print(f"错误：未找到源文件/目录 {source}")
         return
     
-    # 生成汇总json文件
-    if save_json and all_results:
+    # 生成汇总json文件（始终保存）
+    if all_results:
         summary = {
             "model_path": model_path,
             "source": source,
@@ -171,14 +179,14 @@ def run_detection(model_path, source, conf, save_dir, save_json):
         print(f"\n汇总文件已保存: {summary_path}")
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='YOLO Hand Detection Inference Script')
-    parser.add_argument('--model', type=str, default=r'weights\censor_detect_v1.0_s_0725.pt', help='Path to model weights (use hand detection weights for hand tracking)')
-    parser.add_argument('--source', type=str, default=r'imgs', help='Source directory, image path, or video file path')
-    parser.add_argument('--conf', type=float, default=0.6, help='Confidence threshold')
-    parser.add_argument('--save-dir', type=str, default='runs\detections', help='Output directory for saving results')
-    parser.add_argument('--save-json', default=True, action='store_true', help='Save detection results as json files')
+    parser = argparse.ArgumentParser(description='YOLO手部检测推理脚本')
+    parser.add_argument('--model', type=str, default=r'weights\censor_detect_v1.0_s_0725.pt', help='模型权重文件路径（手部跟踪使用手部检测权重）')
+    parser.add_argument('--source', type=str, default=r'imgs', help='源目录、图像路径或视频文件路径')
+    parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
+    parser.add_argument('--save-dir', type=str, default='runs\detections', help='结果保存目录')
+    parser.add_argument('--save-json', default=False, action='store_true', help='保存单个检测json文件（summary.json始终保存）')
     
     args = parser.parse_args()
     
-    print(f"Using model: {args.model}")
+    print(f"使用模型: {args.model}")
     run_detection(args.model, args.source, args.conf, args.save_dir, args.save_json)
