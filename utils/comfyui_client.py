@@ -2,11 +2,16 @@ import json
 import urllib.request
 import urllib.parse
 import os
+import sys
 import io
 import mimetypes
 import time
 from PIL import Image
 from tqdm import tqdm
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 from utils import is_image_file
 

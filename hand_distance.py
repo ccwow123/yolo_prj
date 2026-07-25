@@ -7,8 +7,7 @@ import shutil
 from ultralytics import YOLO
 from tqdm import tqdm
 
-from image_similarity import orb_distance
-from utils import get_next_exp_dir, is_video_file, validate_parameters
+from utils import orb_distance, get_next_exp_dir, is_video_file, validate_parameters
 
 JPEG_QUALITY_PARAM = [int(cv2.IMWRITE_JPEG_QUALITY)]
 

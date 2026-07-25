@@ -8,7 +8,8 @@ from tqdm import tqdm
 from utils import get_next_exp_dir, is_video_file, save_detection_results
 
 def run_image_detection(model_path, source, conf, save_dir, save_json):
-    model = YOLO(model_path)
+    model = YOLO(model_path).to('cuda')
+    model.eval()
     
     results = model(
         source=source,
@@ -25,7 +26,8 @@ def run_image_detection(model_path, source, conf, save_dir, save_json):
     print(f"\nAll results saved to {save_dir}")
 
 def run_video_detection(model_path, source, conf, save_dir, save_json):
-    model = YOLO(model_path)
+    model = YOLO(model_path).to('cuda')
+    model.eval()
     
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
@@ -170,9 +172,9 @@ def run_detection(model_path, source, conf, save_dir, save_json):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO Hand Detection Inference Script')
-    parser.add_argument('--model', type=str, default=r'weights\erax-anti-nsfw-yolo11s-v1.1.pt', help='Path to model weights (use hand detection weights for hand tracking)')
-    parser.add_argument('--source', type=str, default=r'E:\Share\111', help='Source directory, image path, or video file path')
-    parser.add_argument('--conf', type=float, default=0.25, help='Confidence threshold')
+    parser.add_argument('--model', type=str, default=r'weights\censor_detect_v1.0_s_0725.pt', help='Path to model weights (use hand detection weights for hand tracking)')
+    parser.add_argument('--source', type=str, default=r'imgs', help='Source directory, image path, or video file path')
+    parser.add_argument('--conf', type=float, default=0.6, help='Confidence threshold')
     parser.add_argument('--save-dir', type=str, default='runs\detections', help='Output directory for saving results')
     parser.add_argument('--save-json', default=True, action='store_true', help='Save detection results as json files')
     

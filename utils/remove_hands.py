@@ -5,7 +5,7 @@ import numpy as np
 from ultralytics import YOLO
 from tqdm import tqdm
 
-from utils import get_next_exp_dir
+from .utils import get_next_exp_dir
 
 def remove_hands(image_path, model, conf=0.4, book_width_ratio=0.0, min_area=5000, 
                  max_area=100000, aspect_ratio_range=(0.3, 3.0), visualize_mask=False):
