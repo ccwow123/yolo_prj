@@ -3,10 +3,9 @@ import os
 import cv2
 import json
 import logging
-from ultralytics import YOLO
 from tqdm import tqdm
 
-from utils import get_next_exp_dir, is_video_file, save_detection_results
+from utils import get_next_exp_dir, is_video_file, save_detection_results, load_yolo_model
 
 # logger
 logger = logging.getLogger(__name__)
@@ -211,16 +210,10 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
     logger.info(f"使用模型: {args.model}")
 
-    # 加载模型一次并移动到指定设备（若不可用则回退到 cpu）
-    model = YOLO(args.model)
-    try:
-        model.to(args.device)
-    except Exception as e:
-        logger.warning(f"无法将模型移动到 {args.device}: {e}，将使用 cpu")
-        try:
-            model.to('cpu')
-        except Exception:
-            pass
-
-    model.eval()
+    # 使用统一的模型加载函数
+    model, device_info = load_yolo_model(args.model)
+    if model is None:
+        logger.error("模型加载失败")
+        exit(1)
+    
     run_detection(model, args.model, args.source, args.conf, args.save_dir, args.save_json, args.save_annotated)

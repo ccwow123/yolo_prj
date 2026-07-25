@@ -2,10 +2,10 @@ import argparse
 import os
 import cv2
 import numpy as np
-from ultralytics import YOLO
 from tqdm import tqdm
 
 from .utils import get_next_exp_dir
+from .hand_distance_utils import load_yolo_model
 
 def remove_hands(image_path, model, conf=0.4, book_width_ratio=0.0, min_area=5000, 
                  max_area=100000, aspect_ratio_range=(0.3, 3.0), visualize_mask=False):
@@ -98,19 +98,9 @@ def create_comparison(img_original, img_result, mask):
 
 def process_folder(input_dir, output_dir, model_path, conf=0.4, book_width_ratio=0.0, 
                    min_area=5000, max_area=100000, aspect_ratio_range=(0.3, 3.0), visualize=False):
-    print(f"正在加载模型: {model_path}")
-    try:
-        model = YOLO(model_path)
-        print("模型加载成功")
-    except Exception as e:
-        print(f"直接加载失败，尝试从Ultralytics Hub下载...")
-        try:
-            model = YOLO(f"{model_path}.pt")
-            print("从Hub下载并加载成功")
-        except Exception as e2:
-            print(f"错误: 无法加载模型 {model_path}: {e2}")
-            print("请确保模型文件存在，或使用官方模型名称如 'yolov8s-seg'")
-            raise
+    model, device_info = load_yolo_model(model_path)
+    if model is None:
+        raise RuntimeError(f"无法加载模型: {model_path}")
     
     image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')
     files = sorted([f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f)) and f.lower().endswith(image_extensions)])

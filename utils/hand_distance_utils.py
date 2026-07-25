@@ -226,6 +226,7 @@ def load_yolo_model(model_path):
     try:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = YOLO(model_path).to(device)
+        model.eval()
         logger.info(f"模型加载成功: {model_path}")
         
         actual_device = model.device
