@@ -9,7 +9,23 @@ from tqdm import tqdm
 
 from utils import orb_distance, get_next_exp_dir, is_video_file, validate_parameters
 
-JPEG_QUALITY_PARAM = [int(cv2.IMWRITE_JPEG_QUALITY)]
+def detect_hands(model, frame, conf):
+    """
+    检测手部（公共函数）
+    
+    Args:
+        model: YOLO模型对象
+        frame: 图像帧（numpy数组）
+        conf: 置信度阈值
+    
+    Returns:
+        result: YOLO检测结果
+        has_hands: 是否检测到至少2只手
+    """
+    results = model(frame, verbose=False, conf=conf)
+    result = results[0]
+    has_hands = result.boxes is not None and len(result.boxes) >= 2
+    return result, has_hands
 
 def calculate_hand_distance(image, boxes):
     if len(boxes) < 2:
@@ -53,11 +69,10 @@ def process_single_image(model, image_path, save_dir, save_txt, crop_ratio=0.3, 
         print(f"错误：无法读取图片 {image_path}")
         return
     
-    results = model(image, verbose=False, conf=conf)
-    result = results[0]
+    result, has_hands = detect_hands(model, image, conf)
     
-    if result.boxes is None or len(result.boxes) == 0:
-        print(f"在 {os.path.basename(image_path)} 中未检测到手部")
+    if not has_hands:
+        print(f"在 {os.path.basename(image_path)} 中未检测到至少2只手")
         return
     
     distance, annotated, hands = calculate_hand_distance(image, result.boxes)
@@ -160,10 +175,9 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
             current_distance = None
             annotated = frame.copy()
             
-            results = model(frame, verbose=False, conf=conf)
-            result = results[0]
+            result, has_hands = detect_hands(model, frame, conf)
             
-            if result.boxes is not None and len(result.boxes) >= 2:
+            if has_hands:
                 distance, annotated, _ = calculate_hand_distance(frame, result.boxes)
                 current_distance = last_distance = distance
                 distances.append(distance)
@@ -210,7 +224,6 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
             image = cv2.imread(src_path)
             dst_path = os.path.join(filtered_dir, f'screenshot_{frame_num:06d}.jpg')
             cv2.imwrite(dst_path, image, jpeg_params)
-            # print(f"  转换: screenshot_{frame_num:06d}.png -> .jpg")
     print(f"已转换 {len(filtered_frames)} 张截图")
     
     avg_distance = np.mean(distances) if distances else None
@@ -294,8 +307,13 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt, distance_thr
     os.makedirs(save_dir, exist_ok=True)
     print(f"结果将保存到: {save_dir}")
     
+    # 统一处理逻辑（参考detect.py）
     if os.path.isfile(source):
-        process_video(model, source, save_dir, save_txt, distance_threshold, stable_duration, crop_ratio, quality, conf) if is_video_file(source) else process_single_image(model, source, save_dir, save_txt, crop_ratio, quality, conf)
+        if is_video_file(source):
+            process_video(model, source, save_dir, save_txt, distance_threshold, stable_duration, crop_ratio, quality, conf)
+        else:
+            print(f"处理单张图像: {os.path.basename(source)}")
+            process_single_image(model, source, save_dir, save_txt, crop_ratio, quality, conf)
     elif os.path.isdir(source):
         files = [f for f in os.listdir(source) if os.path.isfile(os.path.join(source, f))]
         if not files:
