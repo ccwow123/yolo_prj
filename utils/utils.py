@@ -50,6 +50,38 @@ def is_image_file(filepath):
     return filepath.lower().endswith(image_extensions)
 
 
+def is_grayscale(image_path):
+    """
+    判断图像是否为灰度图
+    
+    Args:
+        image_path: 图像文件路径
+    
+    Returns:
+        bool: True表示灰度图（需要上色），False表示彩色图
+    """
+    import numpy as np
+    
+    try:
+        img = cv2.imread(image_path)
+        if img is None:
+            return False
+        
+        # 如果是单通道图像，直接认为是灰度图
+        if len(img.shape) == 2:
+            return True
+        
+        # 如果是多通道图像，检查是否所有通道值相同
+        b, g, r = cv2.split(img)
+        if np.array_equal(b, g) and np.array_equal(g, r):
+            return True
+        
+        return False
+    except Exception as e:
+        print(f"判断图像类型时出错: {e}")
+        return False
+
+
 def get_files_by_extension(directory, extensions):
     """
     获取目录中指定扩展名的所有文件
