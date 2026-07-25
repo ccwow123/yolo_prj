@@ -2,10 +2,14 @@ import argparse
 import os
 import cv2
 import json
+import logging
 from ultralytics import YOLO
 from tqdm import tqdm
 
 from utils import get_next_exp_dir, is_video_file, save_detection_results
+
+# logger
+logger = logging.getLogger(__name__)
 
 def detect_single_frame(model, frame, conf, save_dir=None, filename=None, save_json=False, save_annotated=True):
     """
@@ -60,34 +64,28 @@ def detect_single_frame(model, frame, conf, save_dir=None, filename=None, save_j
     
     return data, result.plot()
 
-def run_image_detection(model_path, source, conf, save_dir, save_json, save_annotated=True):
-    """
-    运行图像检测
-    """
-    model = YOLO(model_path).to('cuda')
+def run_image_detection(model, source, conf, save_dir, save_json, save_annotated=True):
+    """运行图像检测（使用已加载的 model 对象）"""
     model.eval()
-    
+
     results = model(
         source=source,
         conf=conf,
         save=False,
         verbose=False
     )
-    
-    print("正在保存检测结果...")
+
+    logger.info("正在保存检测结果...")
     for result in tqdm(results, desc="处理图像", unit="张"):
         img_name = os.path.basename(result.path)
         save_detection_results(result, save_dir, img_name, save_json, save_annotated)
-    
-    print(f"\n所有结果已保存到 {save_dir}")
 
-def run_video_detection(model_path, source, conf, save_dir, save_json, save_annotated=True):
-    """
-    运行视频检测
-    """
-    model = YOLO(model_path).to('cuda')
+    logger.info(f"\n所有结果已保存到 {save_dir}")
+
+def run_video_detection(model, source, conf, save_dir, save_json, save_annotated=True):
+    """运行视频检测（使用已加载的 model 对象）"""
     model.eval()
-    
+
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         print(f"错误：无法打开视频文件 {source}")
@@ -107,7 +105,7 @@ def run_video_detection(model_path, source, conf, save_dir, save_json, save_anno
     
     video_results = []
     
-    print(f"正在处理视频: {video_name}")
+    logger.info(f"正在处理视频: {video_name}")
     with tqdm(total=total_frames, desc="处理帧", unit="帧") as pbar:
         frame_count = 0
         while cap.isOpened():
@@ -129,61 +127,57 @@ def run_video_detection(model_path, source, conf, save_dir, save_json, save_anno
     
     cap.release()
     out.release()
-    print(f"\n视频检测完成。输出已保存到 {output_video_path}")
+    logger.info(f"\n视频检测完成。输出已保存到 {output_video_path}")
     
     return video_results
 
-def run_detection(model_path, source, conf, save_dir, save_json, save_annotated=True):
-    """
-    运行检测主函数
-    """
+def run_detection(model, model_path, source, conf, save_dir, save_json, save_annotated=True):
+    """运行检测主函数（model 已加载）"""
     if save_dir is None:
         save_dir = get_next_exp_dir('runs/detect')
     else:
         save_dir = get_next_exp_dir(save_dir)
-    
+
     os.makedirs(save_dir, exist_ok=True)
-    print(f"结果将保存到: {save_dir}")
-    
+    logger.info(f"结果将保存到: {save_dir}")
+
     all_results = []
-    
+
     if os.path.isfile(source):
         if is_video_file(source):
-            video_results = run_video_detection(model_path, source, conf, save_dir, save_json, save_annotated)
+            video_results = run_video_detection(model, source, conf, save_dir, save_json, save_annotated)
             if video_results:
                 all_results.extend(video_results)
         else:
-            print(f"处理单张图像: {os.path.basename(source)}")
-            model = YOLO(model_path)
+            logger.info(f"处理单张图像: {os.path.basename(source)}")
             results = model(source, conf=conf, save=False, verbose=False)
             img_results = save_detection_results(results[0], save_dir, os.path.basename(source), save_json, save_annotated)
             if img_results:
                 all_results.append(img_results)
-            print(f"已保存 {os.path.basename(source)} 的结果")
-    
+            logger.info(f"已保存 {os.path.basename(source)} 的结果")
+
     elif os.path.isdir(source):
         files = [f for f in os.listdir(source) if os.path.isfile(os.path.join(source, f))]
-        
+
         with tqdm(total=len(files), desc="处理文件", unit="个") as pbar:
             for filename in files:
                 filepath = os.path.join(source, filename)
                 if is_video_file(filepath):
-                    video_results = run_video_detection(model_path, filepath, conf, save_dir, save_json, save_annotated)
+                    video_results = run_video_detection(model, filepath, conf, save_dir, save_json, save_annotated)
                     if video_results:
                         all_results.extend(video_results)
                 else:
-                    model = YOLO(model_path)
                     results = model(filepath, conf=conf, save=False, verbose=False)
                     img_results = save_detection_results(results[0], save_dir, filename, save_json, save_annotated)
                     if img_results:
                         all_results.append(img_results)
                 pbar.update(1)
-        print(f"\n所有文件处理完成。结果已保存到 {save_dir}")
-    
+        logger.info(f"\n所有文件处理完成。结果已保存到 {save_dir}")
+
     else:
-        print(f"错误：未找到源文件/目录 {source}")
+        logger.error(f"错误：未找到源文件/目录 {source}")
         return
-    
+
     # 生成汇总json文件（始终保存）
     if all_results:
         summary = {
@@ -194,11 +188,11 @@ def run_detection(model_path, source, conf, save_dir, save_json, save_annotated=
             "total_detections": sum(r["detection_count"] for r in all_results),
             "results": all_results
         }
-        
+
         summary_path = os.path.join(save_dir, "summary.json")
         with open(summary_path, 'w', encoding='utf-8') as f:
             json.dump(summary, f, indent=2, ensure_ascii=False)
-        print(f"\n汇总文件已保存: {summary_path}")
+        logger.info(f"\n汇总文件已保存: {summary_path}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部检测推理脚本')
@@ -209,8 +203,24 @@ if __name__ == '__main__':
     parser.add_argument('--save-json', default=False, action='store_true', help='保存单个检测json文件（summary.json始终保存）')
     parser.add_argument('--save-annotated', default=True, action='store_true', help='保存带检测框的图片（默认启用）')
     parser.add_argument('--no-annotated', dest='save_annotated', action='store_false', help='保存原图，不带检测框')
-    
+    parser.add_argument('--device', type=str, default='cuda', help='推理设备（例如 cpu 或 cuda）')
+
     args = parser.parse_args()
-    
-    print(f"使用模型: {args.model}")
-    run_detection(args.model, args.source, args.conf, args.save_dir, args.save_json, args.save_annotated)
+
+    # 初始化日志
+    logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
+    logger.info(f"使用模型: {args.model}")
+
+    # 加载模型一次并移动到指定设备（若不可用则回退到 cpu）
+    model = YOLO(args.model)
+    try:
+        model.to(args.device)
+    except Exception as e:
+        logger.warning(f"无法将模型移动到 {args.device}: {e}，将使用 cpu")
+        try:
+            model.to('cpu')
+        except Exception:
+            pass
+
+    model.eval()
+    run_detection(model, args.model, args.source, args.conf, args.save_dir, args.save_json, args.save_annotated)
