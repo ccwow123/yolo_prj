@@ -50,70 +50,70 @@ def is_image_file(filepath):
     return filepath.lower().endswith(image_extensions)
 
 
-def is_grayscale(image_path, saturation_threshold=10, variance_threshold=10):
+def is_grayscale_v2(image_path, saturation_threshold=10, variance_threshold=10, sample_size=64):
     """
-    判断图像是否为灰度图（使用HSV饱和度分析和通道方差分析）
-    
+    快速判断图像是否为灰度图（V2版，先缩放采样再判断，速度更快）
+
     Args:
         image_path: 图像文件路径
-        saturation_threshold: 饱和度阈值（0-255），低于此值认为是灰度图
-        variance_threshold: 通道方差阈值，低于此值认为三个通道差异很小
-    
+        saturation_threshold: HSV饱和度阈值（0-255），低于此值认为是灰度图
+        variance_threshold: 通道差异阈值，低于此值认为三个通道差异很小
+        sample_size: 采样尺寸，越小越快，默认64
+
     Returns:
         bool: True表示灰度图（需要上色），False表示彩色图
     """
     import numpy as np
-    
+
     try:
-        img = cv2.imread(image_path)
+        img = cv2.imread(image_path, cv2.IMREAD_COLOR)
         if img is None:
             return False
-        
-        # 如果是单通道图像，直接认为是灰度图
+
         if len(img.shape) == 2:
             return True
-        
-        # 如果通道数不是3，无法判断，返回False
+
         if img.shape[2] != 3:
             return False
-        
-        # 方法1: 使用HSV颜色空间分析饱和度
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        saturation = hsv[:, :, 1]
-        
-        # 计算平均饱和度
-        mean_saturation = np.mean(saturation)
-        
-        # 方法2: 计算RGB通道之间的差异（方差）
-        b, g, r = cv2.split(img)
-        diff_br = np.mean(np.abs(b - r))  # B-R通道差异
-        diff_bg = np.mean(np.abs(b - g))  # B-G通道差异
-        diff_gr = np.mean(np.abs(g - r))  # G-R通道差异
-        avg_diff = (diff_br + diff_bg + diff_gr) / 3
-        
-        # 方法3: 计算每个像素的颜色方差
-        pixel_var = np.var(img, axis=2).mean()
-        
-        # 判断逻辑：满足以下任一条件认为是灰度图
-        is_gray = False
-        
-        # 条件1: 平均饱和度低于阈值
+
+        height, width = img.shape[:2]
+        if min(height, width) <= 1:
+            return True
+
+        # 只对缩小后的采样图做判断，显著提升速度
+        scale = min(1.0, sample_size / max(height, width))
+        sample_width = max(1, int(width * scale))
+        sample_height = max(1, int(height * scale))
+        sample = cv2.resize(img, (sample_width, sample_height), interpolation=cv2.INTER_AREA)
+
+        # 基于通道间差异判断：灰度图各通道几乎一致
+        channel_diff = np.max(sample, axis=2) - np.min(sample, axis=2)
+        mean_diff = float(np.mean(channel_diff))
+        if mean_diff < variance_threshold:
+            return True
+
+        # 仅在小样本上做一次HSV饱和度判断，仍然保持较高准确率
+        hsv = cv2.cvtColor(sample, cv2.COLOR_BGR2HSV)
+        mean_saturation = float(np.mean(hsv[:, :, 1]))
         if mean_saturation < saturation_threshold:
-            is_gray = True
-        
-        # 条件2: 通道间平均差异很小
-        if avg_diff < variance_threshold:
-            is_gray = True
-        
-        # 条件3: 像素颜色方差很小（所有通道值接近）
-        if pixel_var < variance_threshold:
-            is_gray = True
-        
-        return is_gray
-        
+            return True
+
+        return False
+
     except Exception as e:
         print(f"判断图像类型时出错: {e}")
         return False
+
+
+def is_grayscale(image_path, saturation_threshold=10, variance_threshold=10):
+    """
+    兼容旧接口的灰度图检测入口，默认使用 V2 版本。
+    """
+    return is_grayscale_v2(
+        image_path,
+        saturation_threshold=saturation_threshold,
+        variance_threshold=variance_threshold,
+    )
 
 
 def get_files_by_extension(directory, extensions):
