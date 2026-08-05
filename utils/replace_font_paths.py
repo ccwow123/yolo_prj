@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Replace font_path values in JSON files.
+"""替换 JSON 文件中的 font_path 值。
 
-Examples:
+示例：
     python replace_font_paths.py Arial Arial-Unicode-Regular 0009_10_translations.json
     python replace_font_paths.py Arial Arial-Unicode-Regular ./json_files --recursive
 """
@@ -14,7 +14,7 @@ from typing import Any
 
 
 def replace_font_paths(data: Any, old_font: str, new_font: str) -> tuple[bool, int]:
-    """Recursively replace font_path values using a regular expression pattern."""
+    """递归使用正则表达式模式替换 font_path 字段的值。"""
     changed = False
     count = 0
 
@@ -56,7 +56,7 @@ def iter_json_files(target: Path) -> list[Path]:
         return [target] if target.suffix.lower() == ".json" else []
 
     if not target.exists():
-        raise FileNotFoundError(f"Path does not exist: {target}")
+        raise FileNotFoundError(f"路径不存在：{target}")
 
     return sorted(p for p in target.glob("*.json") if p.is_file())
 
@@ -81,14 +81,14 @@ def main() -> None:
         None: 无返回值，直接打印执行结果到控制台
     """
     # 创建命令行参数解析器
-    parser = argparse.ArgumentParser(description="Replace font_path values in JSON files")
+    parser = argparse.ArgumentParser(description="替换 JSON 文件中的 font_path 值")
     parser.add_argument("old_font", nargs="?", default="Arial-Unicode-Regular", 
-                        help="Font name to replace, for example: Arial")
+                        help="需要被替换的字体名称，例如：Arial")
     parser.add_argument("new_font", nargs="?", default="Arial", 
-                        help="Replacement font name, for example: Arial-Unicode-Regular")
+                        help="替换后的字体名称，例如：Arial-Unicode-Regular")
     parser.add_argument("target", nargs="?", 
                         default=r"E:\Share\1\original_images\manga_translator_work\json", 
-                        help="JSON file or directory to process")
+                        help="目标 JSON 文件或目录路径")
 
     # 解析命令行参数
     args = parser.parse_args()
@@ -100,7 +100,7 @@ def main() -> None:
 
     # 如果未找到任何JSON文件，输出提示并退出
     if not files:
-        print("No JSON files found.")
+        print("未找到任何 JSON 文件。")
         return
 
     # 存储被修改的文件信息（路径和替换次数）
@@ -113,11 +113,11 @@ def main() -> None:
             
     # 输出最终处理结果
     if not modified_files:
-        print("No matching font_path values were found.")
+        print("未找到匹配的 font_path 值。")
     else:
-        print(f"Total modified files: {len(modified_files)}")
+        print(f"共修改文件数：{len(modified_files)}")
         for path, count in modified_files:
-            print(f"- {path}: {count} replacements")
+            print(f"- {path}: 替换 {count} 处")
 
 
 if __name__ == "__main__":
