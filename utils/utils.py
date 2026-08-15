@@ -601,3 +601,60 @@ def merge_audio_with_video(video_path, audio_source, video_paths):
         if os.path.exists(temp_output):
             os.remove(temp_output)
         return False
+
+
+def extract_video_frames(video_path, output_dir, frame_types=None, image_format='jpg'):
+    """
+    提取单个视频的首帧和/或尾帧
+
+    Args:
+        video_path: 视频文件路径
+        output_dir: 输出目录
+        frame_types: 要提取的帧类型列表，可选 'first'、'last'，默认 ['first', 'last']
+        image_format: 图片保存格式，默认 jpg
+
+    Returns:
+        list: 提取并保存的图片文件路径列表；失败返回空列表
+    """
+    if frame_types is None:
+        frame_types = ['first', 'last']
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"[ERROR] 无法打开视频: {video_path}")
+        return []
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if total_frames <= 0:
+        print(f"[ERROR] 视频帧数异常: {video_path}")
+        cap.release()
+        return []
+
+    video_name = os.path.splitext(os.path.basename(video_path))[0].strip().replace(" ", "_")
+    os.makedirs(output_dir, exist_ok=True)
+
+    saved_paths = []
+
+    # 提取首帧
+    if 'first' in frame_types:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        ret, frame = cap.read()
+        if ret:
+            out_path = os.path.join(output_dir, f"{video_name}_first.{image_format}")
+            cv2.imwrite(out_path, frame)
+            saved_paths.append(out_path)
+            print(f"  [首帧] {os.path.basename(out_path)}")
+
+    # 提取尾帧（往回退2帧避免读取失败）
+    if 'last' in frame_types:
+        last_pos = max(0, total_frames - 2)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, last_pos)
+        ret, frame = cap.read()
+        if ret:
+            out_path = os.path.join(output_dir, f"{video_name}_last.{image_format}")
+            cv2.imwrite(out_path, frame)
+            saved_paths.append(out_path)
+            print(f"  [尾帧] {os.path.basename(out_path)}")
+
+    cap.release()
+    return saved_paths

@@ -5,3 +5,8 @@
 /lemon
 /runs
 /weights
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
