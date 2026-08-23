@@ -103,54 +103,26 @@ def save_screenshot(frame, frame_count, screenshots_dir, crop_ratio):
 
 def deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_threshold=0.8):
     """
-    使用ORB特征匹配去除相似截图
-    
+    使用ORB特征匹配去除相似截图（委托给 image_dedup.deduplicate_screenshotsV2）
+
     Args:
         screenshots_dir: 截图目录
         triggered_frames: 触发截图的帧号列表
         similarity_threshold: 相似度阈值（越低越严格）
-    
+
     Returns:
         filtered_frames: 去重后的帧号列表
         removed_frames: 被移除的帧号列表
     """
-    from .image_similarity import orb_distance
-    
-    if len(triggered_frames) <= 1:
-        return triggered_frames, []
-    
-    filtered_frames, removed_frames = [], []
-    if triggered_frames:
-        prev_frame, prev_image = triggered_frames[0], cv2.imread(os.path.join(screenshots_dir, f'screenshot_{triggered_frames[0]:06d}.png'))
-        current_frame = current_image = None
-        
-        for frame in triggered_frames[1:]:
-            frame_image = cv2.imread(os.path.join(screenshots_dir, f'screenshot_{frame:06d}.png'))
-            
-            if frame_image is None or prev_image is None:
-                if current_frame is not None:
-                    removed_frames.append(current_frame)
-                current_frame, current_image, prev_frame, prev_image = prev_frame, prev_image, frame, frame_image
-                logger.debug(f"替换帧 {frame} (图片读取错误)")
-                continue
-            
-            if current_frame is None:
-                current_frame, current_image, prev_frame, prev_image = prev_frame, prev_image, frame, frame_image
-                continue
-            
-            if orb_distance(current_image, frame_image) <= similarity_threshold:
-                removed_frames.append(current_frame)
-                current_frame, current_image, prev_frame, prev_image = prev_frame, prev_image, frame, frame_image
-            else:
-                filtered_frames.append(current_frame)
-                current_frame, current_image, prev_frame, prev_image = prev_frame, prev_image, frame, frame_image
-        
-        if current_frame is not None:
-            filtered_frames.append(current_frame)
-            if prev_frame != current_frame:
-                removed_frames.append(prev_frame)
-    
-    return filtered_frames, removed_frames
+    from .image_dedup import deduplicate_screenshotsV2
+
+    return deduplicate_screenshotsV2(
+        screenshots_dir,
+        triggered_frames=triggered_frames,
+        similarity_threshold=similarity_threshold,
+        method="orb",
+        ext=".png"
+    )
 
 
 def save_distance_summary(save_dir, video_name, fps, distance_threshold, stable_duration, need_frames,

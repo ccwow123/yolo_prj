@@ -353,13 +353,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部距离计算器（自动截图）')
     parser.add_argument('--model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt', 
                         help='手部检测模型权重路径')
-    parser.add_argument('--source', type=str, default=r"E:\Download\视频\餐.mp4", 
+    parser.add_argument('--source', type=str, default=r"D:\cute aggression ういり画集 日版.mp4", 
                         help='源目录、图片路径或视频文件路径')
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
     parser.add_argument('--save-dir', type=str, default='runs\\hand_distance', 
                         help='输出目录（未指定时自动递增）')
     parser.add_argument('--no-save-txt', action='store_true', help='不保存距离结果为txt文件')
-    parser.add_argument('--distance-threshold', type=int, default=1500, 
+    parser.add_argument('--distance-threshold', type=int, default=1400, 
                         help='触发截图的距离阈值（像素）')
     parser.add_argument('--stable-duration', type=float, default=2, 
                         help='触发截图所需的稳定时长（秒）')
