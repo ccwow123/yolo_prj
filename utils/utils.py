@@ -658,3 +658,29 @@ def extract_video_frames(video_path, output_dir, frame_types=None, image_format=
 
     cap.release()
     return saved_paths
+
+
+def load_source_list(list_file):
+    """
+    从txt文件读取源路径列表，每行一个路径。
+
+    Args:
+        list_file: txt文件路径
+
+    Returns:
+        list[str]: 路径列表（已跳过空行和#注释行，并去除两端引号）
+
+    Raises:
+        FileNotFoundError: 当txt文件不存在时
+    """
+    if not os.path.exists(list_file):
+        raise FileNotFoundError(f"txt文件不存在: {list_file}")
+
+    paths = []
+    with open(list_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            p = line.strip().strip('"').strip("'")
+            if not p or p.startswith('#'):
+                continue
+            paths.append(p)
+    return paths

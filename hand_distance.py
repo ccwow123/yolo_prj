@@ -6,7 +6,7 @@ import logging
 from tqdm import tqdm
 
 from utils import (
-    get_next_exp_dir, is_video_file, validate_parameters,
+    get_next_exp_dir, is_video_file, validate_parameters, load_source_list,
     detect_hands, calculate_hand_distance, crop_image, save_screenshot,
     deduplicate_screenshots, save_distance_summary, save_frame_distance_log,
     load_yolo_model, convert_screenshots_to_jpg
@@ -214,7 +214,7 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
 
 def run_hand_distance(model_path, source, conf, save_dir, save_txt, 
                       distance_threshold=1400, stable_duration=1.0, 
-                      crop_ratio=0.3, quality=80):
+                      crop_ratio=0.3, quality=80, list_file=None):
     """
     运行手部距离计算主函数
     
@@ -228,6 +228,7 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
         stable_duration: 稳定时长
         crop_ratio: 裁剪比例
         quality: 图像质量
+        list_file: 可选，从txt文件批量导入源路径（每行一个），优先于source
     
     Returns:
         dict: 汇总统计信息
@@ -246,10 +247,6 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
             logger.error(f"  - {error}")
         return {'success': False, 'errors': errors}
     
-    if not os.path.exists(source):
-        logger.error(f"源文件/目录不存在: {source}")
-        return {'success': False, 'error': '源文件/目录不存在'}
-    
     model, device_info = load_yolo_model(model_path)
     if model is None:
         return {'success': False, 'error': '模型加载失败'}
@@ -267,62 +264,59 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
         'video_results': []
     }
     
-    if os.path.isfile(source):
-        stats['total_files'] = 1
-        if is_video_file(source):
-            stats['video_count'] = 1
-            result = process_video(model, source, save_dir, save_txt, distance_threshold, 
-                                  stable_duration, crop_ratio, quality, conf)
-            if result['success']:
-                stats['success_count'] = 1
-                stats['video_results'].append(result)
+    # 收集待处理的 (路径, 是否视频) 列表
+    items = []
+    if list_file:
+        try:
+            sources = load_source_list(list_file)
+        except FileNotFoundError as e:
+            logger.error(str(e))
+            return {'success': False, 'error': 'txt文件不存在'}
+        for path in sources:
+            if os.path.isfile(path):
+                items.append((path, is_video_file(path)))
             else:
-                stats['failed_count'] = 1
-        else:
-            stats['image_count'] = 1
-            result = process_single_image(model, source, save_dir, save_txt, crop_ratio, quality, conf)
-            if result['success']:
-                stats['success_count'] = 1
-            else:
-                stats['failed_count'] = 1
-    
+                logger.warning(f"跳过（路径不存在或不是文件）: {path}")
+        if not items:
+            logger.error(f"txt文件中没有有效的文件路径: {list_file}")
+            return {'success': False, 'error': 'txt中没有有效路径'}
+        logger.info(f"从txt导入 {len(items)} 个文件: {list_file}")
+    elif os.path.isfile(source):
+        items.append((source, is_video_file(source)))
     elif os.path.isdir(source):
         files = [f for f in os.listdir(source) if os.path.isfile(os.path.join(source, f))]
         if not files:
             logger.warning(f"目录为空: {source}")
             return {'success': False, 'error': '目录为空'}
-        
-        video_files = [f for f in files if is_video_file(os.path.join(source, f))]
-        image_files = [f for f in files if not is_video_file(os.path.join(source, f))]
-        
-        stats['total_files'] = len(files)
-        stats['video_count'] = len(video_files)
-        stats['image_count'] = len(image_files)
-        
-        logger.info(f"发现 {len(video_files)} 个视频文件，{len(image_files)} 个图片文件")
-        
-        if video_files:
-            for filename in video_files:
-                filepath = os.path.join(source, filename)
-                result = process_video(model, filepath, save_dir, save_txt, distance_threshold, 
-                                      stable_duration, crop_ratio, quality, conf)
-                if result['success']:
-                    stats['success_count'] += 1
-                    stats['video_results'].append(result)
-                else:
-                    stats['failed_count'] += 1
-        
-        if image_files:
-            logger.info(f"正在处理 {len(image_files)} 张图片...")
-            for filename in image_files:
-                filepath = os.path.join(source, filename)
-                result = process_single_image(model, filepath, save_dir, save_txt, crop_ratio, quality, conf)
-                if result['success']:
-                    stats['success_count'] += 1
-                else:
-                    stats['failed_count'] += 1
-        
-        logger.info("所有文件处理完成")
+        items = [(os.path.join(source, f), is_video_file(os.path.join(source, f))) for f in files]
+    else:
+        logger.error(f"源文件/目录不存在: {source}")
+        return {'success': False, 'error': '源文件/目录不存在'}
+
+    stats['total_files'] = len(items)
+    stats['video_count'] = sum(1 for _, is_video in items if is_video)
+    stats['image_count'] = stats['total_files'] - stats['video_count']
+
+    logger.info(f"待处理: 视频 {stats['video_count']} 个，图片 {stats['image_count']} 个")
+
+    for path, is_video in items:
+        if is_video:
+            result = process_video(model, path, save_dir, save_txt, distance_threshold,
+                                   stable_duration, crop_ratio, quality, conf)
+            if result['success']:
+                stats['success_count'] += 1
+                stats['video_results'].append(result)
+            else:
+                stats['failed_count'] += 1
+        else:
+            logger.info(f"正在处理图片: {os.path.basename(path)}")
+            result = process_single_image(model, path, save_dir, save_txt, crop_ratio, quality, conf)
+            if result['success']:
+                stats['success_count'] += 1
+            else:
+                stats['failed_count'] += 1
+
+    logger.info("所有文件处理完成")
     
     print_summary(stats, save_dir)
     
@@ -355,6 +349,8 @@ if __name__ == '__main__':
                         help='手部检测模型权重路径')
     parser.add_argument('--source', type=str, default=r"D:\cute aggression ういり画集 日版.mp4", 
                         help='源目录、图片路径或视频文件路径')
+    parser.add_argument('--list-file', type=str, default=None,
+                        help='从txt文件批量导入源路径（每行一个，支持#注释和空行），优先于--source')
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
     parser.add_argument('--save-dir', type=str, default='runs\\hand_distance', 
                         help='输出目录（未指定时自动递增）')
@@ -376,7 +372,10 @@ if __name__ == '__main__':
     logger.info("YOLO手部距离计算器")
     logger.info("="*50)
     logger.info(f"模型: {args.model}")
-    logger.info(f"源: {args.source}")
+    if args.list_file:
+        logger.info(f"源列表txt: {args.list_file}")
+    else:
+        logger.info(f"源: {args.source}")
     logger.info(f"置信度阈值: {args.conf}")
     logger.info(f"距离阈值: {args.distance_threshold} px")
     logger.info(f"稳定时长: {args.stable_duration} 秒")
@@ -386,4 +385,5 @@ if __name__ == '__main__':
     
     run_hand_distance(args.model, args.source, args.conf, args.save_dir, 
                       not args.no_save_txt, args.distance_threshold, 
-                      args.stable_duration, args.crop_ratio, args.quality)
+                      args.stable_duration, args.crop_ratio, args.quality,
+                      list_file=args.list_file)
