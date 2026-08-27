@@ -4,56 +4,7 @@ import cv2
 import numpy as np
 
 from utils import get_next_exp_dir, collect_source_items, imread_unicode
-
-
-def build_content_mask(gray, blur_kernel=5, canny_low=None, canny_high=None,
-                       contour_min_ratio=0.01, close_kernel=15):
-    """
-    提取画面内书籍内容实心掩码（排除跨画面横幅/竖幅反光噪声）。
-    """
-    h_img, w_img = gray.shape
-    image_area = float(w_img * h_img)
-    contour_min_area = image_area * contour_min_ratio
-
-    if blur_kernel > 0 and blur_kernel % 2 == 1:
-        gray_b = cv2.GaussianBlur(gray, (blur_kernel, blur_kernel), 0)
-    else:
-        gray_b = gray
-
-    if canny_low is None or canny_high is None:
-        median = int(np.median(gray_b))
-        canny_low = max(0, int(0.66 * median))
-        canny_high = min(255, int(1.33 * median))
-
-    edges = cv2.Canny(gray_b, canny_low, canny_high)
-
-    if close_kernel > 0 and close_kernel % 2 == 1:
-        kernel = np.ones((close_kernel, close_kernel), np.uint8)
-        closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
-    else:
-        closed = edges
-
-    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return None
-
-    mask = np.zeros(gray.shape, dtype=np.uint8)
-    margin_px = 2
-    kept = False
-    for cnt in contours:
-        if cv2.contourArea(cnt) < contour_min_area:
-            continue
-        x, y, w, h = cv2.boundingRect(cnt)
-        left = x <= margin_px
-        right = x + w >= w_img - margin_px
-        top = y <= margin_px
-        bottom = y + h >= h_img - margin_px
-        if (left and right) or (top and bottom):
-            continue
-        kept = True
-        cv2.drawContours(mask, [cnt], -1, 255, -1)
-
-    return mask if kept else None
+from utils.cv import build_book_mask
 
 
 def find_edges(mask, min_support=0.5, band_ratio=0.24):
@@ -162,7 +113,7 @@ def process_single(image_path, output_dir, margin=0, min_support=0.5, debug=Fals
     name = os.path.splitext(os.path.basename(image_path))[0]
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    mask = build_content_mask(gray)
+    mask = build_book_mask(gray)
     n_sides = 0
     out_path = os.path.join(output_dir, f"{name}_edge.jpg")
 

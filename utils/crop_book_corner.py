@@ -4,73 +4,7 @@ import cv2
 import numpy as np
 
 from utils import get_next_exp_dir, collect_source_items, imread_unicode
-
-
-def build_in_scene_mask(gray, blur_kernel=5, canny_low=None, canny_high=None,
-                        contour_min_ratio=0.01, close_kernel=15):
-    """
-    提取画面内书籍内容的实心掩码。
-
-    展开的书在 Canny 下通常被拆成左右页两块内容区，且可能与桌面反光/
-    边框噪声粘连。这里只保留"未同时横跨画面左右边 / 上下边"的达标轮廓，
-    填充成掩码。
-
-    Args:
-        gray: 灰度图
-        blur_kernel: 高斯模糊核大小（应为奇数）
-        canny_low / canny_high: Canny 阈值，None 则基于中值自适应
-        contour_min_ratio: 单轮廓相对图像的最小面积占比，过滤小噪声
-        close_kernel: 闭运算核大小（应为奇数）
-
-    Returns:
-        np.ndarray: 二值掩码（0/255），或 None（无非边框内容）
-    """
-    h_img, w_img = gray.shape
-    image_area = float(w_img * h_img)
-    contour_min_area = image_area * contour_min_ratio
-
-    if blur_kernel > 0 and blur_kernel % 2 == 1:
-        gray_b = cv2.GaussianBlur(gray, (blur_kernel, blur_kernel), 0)
-    else:
-        gray_b = gray
-
-    if canny_low is None or canny_high is None:
-        median = int(np.median(gray_b))
-        canny_low = max(0, int(0.66 * median))
-        canny_high = min(255, int(1.33 * median))
-
-    edges = cv2.Canny(gray_b, canny_low, canny_high)
-
-    if close_kernel > 0 and close_kernel % 2 == 1:
-        kernel = np.ones((close_kernel, close_kernel), np.uint8)
-        closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
-    else:
-        closed = edges
-
-    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return None
-
-    mask = np.zeros(gray.shape, dtype=np.uint8)
-    margin_px = 2
-    kept = []
-    for cnt in contours:
-        if cv2.contourArea(cnt) < contour_min_area:
-            continue
-        x, y, w, h = cv2.boundingRect(cnt)
-        left = x <= margin_px
-        right = x + w >= w_img - margin_px
-        top = y <= margin_px
-        bottom = y + h >= h_img - margin_px
-        # 跨画面横幅/竖幅多为反光或边框噪声，排除
-        if (left and right) or (top and bottom):
-            continue
-        kept.append(cnt)
-        cv2.drawContours(mask, [cnt], -1, 255, -1)
-
-    if not kept:
-        return None
-    return mask
+from utils.cv import build_book_mask
 
 
 def order_corners(pts):
@@ -105,7 +39,7 @@ def detect_book_corners(gray, min_ratio=0.15, epsilon_ratio=0.02, **mask_kwargs)
                               失败返回 (None, 0)
     """
     h_img, w_img = gray.shape
-    mask = build_in_scene_mask(gray, **mask_kwargs)
+    mask = build_book_mask(gray, **mask_kwargs)
     if mask is None:
         return None, 0
 

@@ -1,95 +1,9 @@
 import argparse
 import os
 import cv2
-import numpy as np
 
 from utils import get_next_exp_dir, collect_source_items, imread_unicode
-
-
-def detect_book_bbox(image_gray, min_ratio=0.15, blur_kernel=5,
-                     canny_low=None, canny_high=None, contour_min_ratio=0.01,
-                     close_kernel=15):
-    """
-    检测张开书籍的区域（画面内最大内容区并集）。
-
-    展开的书在 Canny 下通常被拆成左右页两块内容区，且可能与桌面反光/
-    边框噪声粘连。这里取"不触贴图像边界、面积达标的轮廓"包围框并集，
-    即可覆盖整本书的展开区间。
-
-    Args:
-        image_gray: 灰度图
-        min_ratio: 最终包围框相对图像的最小面积占比，低于则视为检测失败
-        blur_kernel: 高斯模糊核大小（应为奇数）
-        canny_low: Canny 低阈值，None 则基于中值自适应
-        canny_high: Canny 高阈值，None 则基于中值自适应
-        contour_min_ratio: 单个轮廓相对图像的最小面积占比，过滤小噪声
-        close_kernel: 形态学闭运算核大小（应为奇数）
-
-    Returns:
-        (x, y, w, h) 包围框；失败返回 None
-    """
-    h_img, w_img = image_gray.shape
-    image_area = float(w_img * h_img)
-    contour_min_area = image_area * contour_min_ratio
-
-    # 高斯降噪
-    if blur_kernel > 0 and blur_kernel % 2 == 1:
-        gray = cv2.GaussianBlur(image_gray, (blur_kernel, blur_kernel), 0)
-    else:
-        gray = image_gray
-
-    # Canny 阈值自适应
-    if canny_low is None or canny_high is None:
-        median = int(np.median(gray))
-        low = max(0, int(0.66 * median))
-        high = min(255, int(1.33 * median))
-        canny_low = low if canny_low is None else canny_low
-        canny_high = high if canny_high is None else canny_high
-
-    edges = cv2.Canny(gray, canny_low, canny_high)
-
-    # 闭运算连成实体内容块
-    if close_kernel > 0 and close_kernel % 2 == 1:
-        kernel = np.ones((close_kernel, close_kernel), np.uint8)
-        closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
-    else:
-        closed = edges
-
-    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return None
-
-    # 取画面内、面积达标的轮廓包围框并集
-    # 仅排除"同时贴左右两边"或"同时贴上下两边"的横幅/竖幅反光噪声；
-    # 单边贴边（如书页延伸到照片边缘）属于合法内容，予以保留
-    margin_px = 2
-    boxes = []
-    for cnt in contours:
-        if cv2.contourArea(cnt) < contour_min_area:
-            continue
-        x, y, w, h = cv2.boundingRect(cnt)
-        left = x <= margin_px
-        right = x + w >= w_img - margin_px
-        top = y <= margin_px
-        bottom = y + h >= h_img - margin_px
-        if (left and right) or (top and bottom):
-            continue  # 跨画面横幅/竖幅，多为桌面反光/边框噪声
-        boxes.append((x, y, w, h))
-
-    if not boxes:
-        return None
-
-    x1 = min(b[0] for b in boxes)
-    y1 = min(b[1] for b in boxes)
-    x2 = max(b[0] + b[2] for b in boxes)
-    y2 = max(b[1] + b[3] for b in boxes)
-    w, h = x2 - x1, y2 - y1
-
-    # 面积占比校验
-    if float(w * h) / image_area < min_ratio:
-        return None
-
-    return x1, y1, w, h
+from utils.cv import book_contour_bbox
 
 
 def crop_book_image(image, bbox, margin=0):
@@ -136,7 +50,7 @@ def process_single(image_path, output_dir, margin=None, min_ratio=0.15, debug=Fa
         margin = int(image.shape[1] * 0.025)
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    bbox = detect_book_bbox(gray, min_ratio=min_ratio)
+    bbox = book_contour_bbox(gray, min_ratio=min_ratio)
     if bbox is None:
         print(f"  ✗ {os.path.basename(image_path)} - 未检测到书籍区域")
         return False
