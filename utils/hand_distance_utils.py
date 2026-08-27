@@ -149,7 +149,7 @@ def save_distance_summary(save_dir, video_name, fps, distance_threshold, stable_
     """
     album_ratio = avg_screenshot_distance / width if avg_screenshot_distance else None
     
-    with open(os.path.join(save_dir, 'distance_summary.txt'), 'w') as f:
+    with open(os.path.join(save_dir, 'distance_summary.txt'), 'w', encoding='utf-8') as f:
         f.write(f"视频: {video_name}\nFPS: {fps}\n距离阈值: {distance_threshold} px\n稳定时长: {stable_duration} 秒 ({need_frames} 帧)\n")
         f.write(f"处理总帧数: {frame_count}\n有效距离帧数: {len(distances)}\n")
         if distances:
@@ -178,7 +178,7 @@ def save_frame_distance_log(save_dir, frame_distance_log, fps):
         frame_distance_log: 帧距离日志列表
         fps: 视频帧率
     """
-    with open(os.path.join(save_dir, 'frame_distance_log.txt'), 'w') as f:
+    with open(os.path.join(save_dir, 'frame_distance_log.txt'), 'w', encoding='utf-8') as f:
         f.write("# 帧,时间(秒),距离(px)\n")
         for frame_num, distance in frame_distance_log:
             f.write(f"{frame_num},{frame_num/fps:.3f},{distance:.1f}\n" if distance else f"{frame_num},{frame_num/fps:.3f},-1\n")

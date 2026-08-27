@@ -3,15 +3,7 @@ import csv
 import os
 from pathlib import Path
 
-VIDEO_EXTENSIONS = (
-    '.mp4', '.avi', '.mov', '.mkv', '.flv', '.webm',
-    '.wmv', '.m4v', '.ts', '.mpeg', '.mpg', '.3gp', '.rmvb',
-)
-IMAGE_EXTENSIONS = (
-    '.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif',
-    '.webp', '.gif', '.heic', '.heif', '.ico', '.svg',
-)
-ALL_EXTENSIONS = VIDEO_EXTENSIONS + IMAGE_EXTENSIONS
+from utils import is_image_file, is_video_file
 
 
 def collect_media_files(source, recursive):
@@ -24,7 +16,7 @@ def collect_media_files(source, recursive):
     for p in file_iter:
         if not p.is_file():
             continue
-        if p.suffix.lower() in ALL_EXTENSIONS:
+        if is_image_file(str(p)) or is_video_file(str(p)):
             matched.append(p)
 
     # 排序，保证输出稳定
@@ -48,7 +40,7 @@ def export_paths(paths, output, fmt, win_format):
             'path': path_str,
             'filename': p.name,
             'extension': p.suffix.lower(),
-            'type': 'video' if p.suffix.lower() in VIDEO_EXTENSIONS else 'image',
+            'type': 'video' if is_video_file(str(p)) else 'image',
         })
 
     fmt = fmt.lower()

@@ -5,7 +5,7 @@ import json
 import logging
 from tqdm import tqdm
 
-from utils import get_next_exp_dir, is_video_file, save_detection_results, load_yolo_model
+from utils import get_next_exp_dir, is_video_file, is_image_file, save_detection_results, load_yolo_model
 
 # logger
 logger = logging.getLogger(__name__)
@@ -156,7 +156,9 @@ def run_detection(model, model_path, source, conf, save_dir, save_json, save_ann
             logger.info(f"已保存 {os.path.basename(source)} 的结果")
 
     elif os.path.isdir(source):
-        files = [f for f in os.listdir(source) if os.path.isfile(os.path.join(source, f))]
+        files = [f for f in os.listdir(source)
+                 if os.path.isfile(os.path.join(source, f))
+                 and (is_image_file(f) or is_video_file(f))]
 
         with tqdm(total=len(files), desc="处理文件", unit="个") as pbar:
             for filename in files:
@@ -175,7 +177,7 @@ def run_detection(model, model_path, source, conf, save_dir, save_json, save_ann
 
     else:
         logger.error(f"错误：未找到源文件/目录 {source}")
-        return
+        return None
 
     # 生成汇总json文件（始终保存）
     if all_results:
@@ -192,6 +194,8 @@ def run_detection(model, model_path, source, conf, save_dir, save_json, save_ann
         with open(summary_path, 'w', encoding='utf-8') as f:
             json.dump(summary, f, indent=2, ensure_ascii=False)
         logger.info(f"\n汇总文件已保存: {summary_path}")
+
+    return save_dir
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部检测推理脚本')

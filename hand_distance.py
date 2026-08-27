@@ -6,7 +6,7 @@ import logging
 from tqdm import tqdm
 
 from utils import (
-    get_next_exp_dir, is_video_file, validate_parameters, load_source_list,
+    get_next_exp_dir, is_video_file, is_image_file, validate_parameters, load_source_list,
     detect_hands, calculate_hand_distance, crop_image, save_screenshot,
     deduplicate_screenshots, save_distance_summary, save_frame_distance_log,
     load_yolo_model, convert_screenshots_to_jpg
@@ -59,7 +59,7 @@ def process_single_image(model, image_path, save_dir, save_txt, crop_ratio=0.3, 
         cv2.imwrite(output_path, annotated)
     
     if save_txt and distance is not None:
-        with open(os.path.join(save_dir, f'{name}_distance.txt'), 'w') as f:
+        with open(os.path.join(save_dir, f'{name}_distance.txt'), 'w', encoding='utf-8') as f:
             f.write(f"图片: {img_name}\n")
             f.write(f"左手: ({hands[0]['x']:.1f}, {hands[0]['y']:.1f}) 置信度={hands[0]['conf']:.2f}\n")
             f.write(f"右手: ({hands[1]['x']:.1f}, {hands[1]['y']:.1f}) 置信度={hands[1]['conf']:.2f}\n")
@@ -284,7 +284,9 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
     elif os.path.isfile(source):
         items.append((source, is_video_file(source)))
     elif os.path.isdir(source):
-        files = [f for f in os.listdir(source) if os.path.isfile(os.path.join(source, f))]
+        files = [f for f in os.listdir(source)
+                 if os.path.isfile(os.path.join(source, f))
+                 and (is_image_file(f) or is_video_file(f))]
         if not files:
             logger.warning(f"目录为空: {source}")
             return {'success': False, 'error': '目录为空'}

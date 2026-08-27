@@ -34,7 +34,8 @@ def is_video_file(filepath):
     Returns:
         True 如果是视频文件，否则 False
     """
-    video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.webm')
+    video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.webm',
+                        '.wmv', '.m4v', '.ts', '.mpeg', '.mpg', '.3gp', '.rmvb')
     return filepath.lower().endswith(video_extensions)
 
 
@@ -48,7 +49,8 @@ def is_image_file(filepath):
     Returns:
         True 如果是图片文件，否则 False
     """
-    image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')
+    image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif',
+                        '.webp', '.gif', '.heic', '.heif', '.ico', '.svg')
     return filepath.lower().endswith(image_extensions)
 
 
@@ -137,6 +139,26 @@ def get_files_by_extension(directory, extensions):
     return sorted(files)
 
 
+def _build_detections(result):
+    """从 YOLO 结果提取检测列表，统一构建逻辑，避免在多处重复。"""
+    detections = []
+    if result.boxes is None:
+        return detections
+    for box in result.boxes:
+        cls = int(box.cls)
+        conf = float(box.conf)
+        xywh = box.xywh[0].tolist()
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
+        detections.append({
+            "class_id": cls,
+            "class_name": result.names[cls] if hasattr(result, 'names') else "unknown",
+            "confidence": conf,
+            "bbox_xywh": xywh,
+            "bbox_xyxy": [x1, y1, x2, y2]
+        })
+    return detections
+
+
 def save_detection_results(result, save_dir, filename, save_json=False, save_annotated=True):
     """
     保存检测结果到文件
@@ -171,46 +193,15 @@ def save_detection_results(result, save_dir, filename, save_json=False, save_ann
         "detections": []
     }
     
+    detections = _build_detections(result)
+    data["detection_count"] = len(detections)
+    data["detections"] = detections
+    
     # 保存单个json标注（仅当save_json=True时）
-    if save_json and result.boxes is not None and len(result.boxes) > 0:
+    if save_json and detections:
         json_path = os.path.join(save_dir, os.path.splitext(filename)[0] + '.json')
-        detections = []
-        for box in result.boxes:
-            cls = int(box.cls)
-            conf = float(box.conf)
-            xywh = box.xywh[0].tolist()
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            detections.append({
-                "class_id": cls,
-                "class_name": result.names[cls] if hasattr(result, 'names') else "unknown",
-                "confidence": conf,
-                "bbox_xywh": xywh,
-                "bbox_xyxy": [x1, y1, x2, y2]
-            })
-        
-        data["detection_count"] = len(detections)
-        data["detections"] = detections
-        
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-    elif result.boxes is not None and len(result.boxes) > 0:
-        # 不保存单个json，但仍收集检测数据用于汇总
-        detections = []
-        for box in result.boxes:
-            cls = int(box.cls)
-            conf = float(box.conf)
-            xywh = box.xywh[0].tolist()
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            detections.append({
-                "class_id": cls,
-                "class_name": result.names[cls] if hasattr(result, 'names') else "unknown",
-                "confidence": conf,
-                "bbox_xywh": xywh,
-                "bbox_xyxy": [x1, y1, x2, y2]
-            })
-        
-        data["detection_count"] = len(detections)
-        data["detections"] = detections
     
     return data
 

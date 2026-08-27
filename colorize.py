@@ -13,9 +13,9 @@ def main():
     parser = argparse.ArgumentParser(description='图像上色处理流程')
     
     # 输入输出参数
-    parser.add_argument('--source', type=str, default=r'imgs', 
+    parser.add_argument('--source', type=str, default=r'E:\储藏室\画册\ss - 副本\[Cuvie] Bitter Addiction [DL版][机翻]', 
                         help='输入目录或图像文件路径（文件夹1）')
-    parser.add_argument('--output', type=str, default=r'runs\colorize_output', 
+    parser.add_argument('--output', type=str, default='runs', 
                         help='输出目录（文件夹2）')
     
     # ComfyUI 参数
