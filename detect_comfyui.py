@@ -5,6 +5,17 @@ import json
 from detect import run_detection
 from utils import ComfyUIClient, load_yolo_model
 
+'''
+这个脚本用于检测漫画输入目录（文件夹1）中的图片，
+并使用ComfyUI去码处理。
+检测结果保存在detect-save-dir目录（文件夹2）中，
+ComfyUI处理保存在comfyui-save-dir目录（文件夹3）中。
+json文件保存在save-json目录（文件夹4）中。
+'''
+
+
+
+
 def main():
     parser = argparse.ArgumentParser(description='检测 + ComfyUI 处理流程')
     
