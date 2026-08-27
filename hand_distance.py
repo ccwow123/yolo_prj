@@ -7,11 +7,12 @@ from tqdm import tqdm
 
 from utils import (
     get_next_exp_dir, validate_parameters, collect_source_items, imread_unicode,
-    detect_hands, calculate_hand_distance, crop_image, save_screenshot,
+    detect_hands, detect_hands_scaled, calculate_hand_distance, crop_image, save_screenshot,
     deduplicate_screenshots, save_distance_summary, save_frame_distance_log,
     load_yolo_model, convert_screenshots_to_jpg
 )
-from utils.config import DEFAULT_VIDEO_SOURCE
+from utils.cv import frame_mad
+from utils.config import DEFAULT_VIDEO_SOURCE, DEFAULT_INFER_MAX_EDGE, DEFAULT_INFER_IMGSZ, DEFAULT_MOTION_THRESHOLD
 
 # logger
 logger = logging.getLogger(__name__)
@@ -77,7 +78,8 @@ def process_single_image(model, image_path, save_dir, save_txt, crop_ratio=0.3, 
 
 
 def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400, 
-                  stable_duration=1.0, crop_ratio=0.3, quality=80, conf=0.6):
+                  stable_duration=1.0, crop_ratio=0.3, quality=80, conf=0.6,
+                  max_edge=None, imgsz=None, fp16=False, motion_threshold=0.0):
     """
     处理视频文件，检测手部距离并自动截图
     
@@ -91,6 +93,11 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
         crop_ratio: 图像裁剪比例
         quality: 图像压缩质量
         conf: 置信度阈值
+        max_edge: 输入帧最长边像素（None 不预缩放），坐标会映射回原分辨率
+        imgsz: 模型前向尺寸（None 用模型默认）
+        fp16: 是否启用 FP16 混合精度推理（仅 CUDA 生效）
+        motion_threshold: 静止判定阈值；>0 时仅静止帧累计稳定时长并复用上次推理，
+                          运动帧重置计数（截图帧确保清晰静止），0 关闭按原逐帧逻辑
     
     Returns:
         dict: 处理结果统计信息
@@ -118,6 +125,8 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     distances, frame_distance_log, screenshot_distances = [], [], []
     continue_long_dist_frame, screenshot_count, last_screenshot_frame = 0, 0, -1000
     triggered_frames = []
+    last_infer_frame, last_boxes, last_has_hands = None, None, False  # 动态抽帧复用状态
+    prev_frame = None  # 用于静止判定（相对上一帧的运动量）
     
     logger.info(f"正在处理视频: {video_name} (FPS={fps}, 距离阈值={distance_threshold}px, 稳定时长={stable_duration}s)")
     
@@ -140,14 +149,29 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
             current_distance = None
             annotated = frame.copy()
             
-            result, has_hands = detect_hands(model, frame, conf)
+            # 静止判定：相对上一帧无明显运动（motion_threshold<=0 时视为恒静止，保留原逐帧逻辑）
+            is_static = True
+            if motion_threshold > 0 and prev_frame is not None:
+                is_static = frame_mad(frame, prev_frame) <= motion_threshold
+            
+            # 静止帧复用上次推理结果跳过推理，运动帧才真正推理（全帧照常输出与计帧）
+            if is_static and last_infer_frame is not None:
+                boxes, has_hands = last_boxes, last_has_hands
+            else:
+                if max_edge:
+                    boxes, has_hands = detect_hands_scaled(model, frame, conf, max_edge=max_edge, imgsz=imgsz, half=fp16)
+                else:
+                    result, has_hands = detect_hands(model, frame, conf)
+                    boxes = result.boxes if has_hands else None
+                last_infer_frame = frame
+                last_boxes, last_has_hands = boxes, has_hands
             
             if has_hands:
-                distance, annotated, _ = calculate_hand_distance(frame, result.boxes)
+                distance, annotated, _ = calculate_hand_distance(frame, boxes)
                 current_distance = distance
                 distances.append(distance)
                 
-                if distance > distance_threshold:
+                if distance > distance_threshold and is_static:
                     continue_long_dist_frame += 1
                     cv2.putText(annotated, f"Count: {continue_long_dist_frame}/{need_frames}", 
                                 (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
@@ -162,7 +186,8 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
                         continue_long_dist_frame = 0
                 else:
                     continue_long_dist_frame = 0
-                    cv2.putText(annotated, f"Reset - Distance: {distance:.1f}px", 
+                    reason = "Reset - Distance" if distance <= distance_threshold else "Reset - Motion"
+                    cv2.putText(annotated, f"{reason}: {distance:.1f}px", 
                                 (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
             else:
                 cv2.putText(annotated, "Insufficient hands detected", 
@@ -171,6 +196,7 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
             
             frame_distance_log.append((frame_count, current_distance))
             out.write(annotated)
+            prev_frame = frame
             frame_count += 1
             pbar.update(1)
     
@@ -215,7 +241,9 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
 
 def run_hand_distance(model_path, source, conf, save_dir, save_txt, 
                       distance_threshold=1400, stable_duration=1.0, 
-                      crop_ratio=0.3, quality=80, list_file=None):
+                      crop_ratio=0.3, quality=80, list_file=None,
+                      max_edge=DEFAULT_INFER_MAX_EDGE, imgsz=DEFAULT_INFER_IMGSZ,
+                      fp16=True, motion_threshold=DEFAULT_MOTION_THRESHOLD):
     """
     运行手部距离计算主函数
     
@@ -230,6 +258,10 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
         crop_ratio: 裁剪比例
         quality: 图像质量
         list_file: 可选，从txt文件批量导入源路径（每行一个），优先于source
+        max_edge: 视频输入帧最长边像素（None 不预缩放）
+        imgsz: 模型前向尺寸（None 用模型默认）
+        fp16: 是否启用 FP16 混合精度推理（仅 CUDA 生效）
+        motion_threshold: 静止判定阈值，>0 时仅静止帧累计稳定时长并触发截图，0 关闭
     
     Returns:
         dict: 汇总统计信息
@@ -282,7 +314,9 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
     for path, is_video in items:
         if is_video:
             result = process_video(model, path, save_dir, save_txt, distance_threshold,
-                                   stable_duration, crop_ratio, quality, conf)
+                                   stable_duration, crop_ratio, quality, conf,
+                                   max_edge=max_edge, imgsz=imgsz, fp16=fp16,
+                                   motion_threshold=motion_threshold)
             if result['success']:
                 stats['success_count'] += 1
                 stats['video_results'].append(result)
@@ -343,6 +377,14 @@ if __name__ == '__main__':
                         help='图像两边向中央裁剪的总比例（默认0，即不裁剪）')
     parser.add_argument('--quality', type=int, default=100, 
                         help='图像压缩质量（1-100，值越高质量越好）')
+    parser.add_argument('--max-edge', type=int, default=DEFAULT_INFER_MAX_EDGE,
+                        help='视频输入帧最长边像素（0 表示不预缩放），坐标会映射回原分辨率')
+    parser.add_argument('--imgsz', type=int, default=DEFAULT_INFER_IMGSZ,
+                        help='模型前向尺寸（直接决定网络 FLOPs，0 用模型默认）')
+    parser.add_argument('--motion-threshold', type=float, default=DEFAULT_MOTION_THRESHOLD,
+                        help='静止判定阈值（0-255 帧间MAD，0 关闭）；仅静止帧累计稳定时长并触发截图')
+    parser.add_argument('--no-fp16', dest='fp16', action='store_false', default=True,
+                        help='禁用 FP16 混合精度推理（仅 GPU 生效）')
     
     args = parser.parse_args()
     
@@ -361,9 +403,17 @@ if __name__ == '__main__':
     logger.info(f"稳定时长: {args.stable_duration} 秒")
     logger.info(f"裁剪比例: {args.crop_ratio}")
     logger.info(f"压缩质量: {args.quality}")
+    logger.info(f"帧最长边: {args.max_edge if args.max_edge else '不预缩放'} px")
+    logger.info(f"模型 imgsz: {args.imgsz if args.imgsz else '默认'}")
+    logger.info(f"静止判定阈值: {'开 (' + str(args.motion_threshold) + ' MAD, 仅静止帧触发截图)' if args.motion_threshold > 0 else '关'}")
+    logger.info(f"FP16: {'开' if args.fp16 else '关'}")
     logger.info("="*50)
     
     run_hand_distance(args.model, args.source, args.conf, args.save_dir, 
                       not args.no_save_txt, args.distance_threshold, 
                       args.stable_duration, args.crop_ratio, args.quality,
-                      list_file=args.list_file)
+                      list_file=args.list_file,
+                      max_edge=(args.max_edge or None),
+                      imgsz=(args.imgsz or None),
+                      fp16=args.fp16,
+                      motion_threshold=args.motion_threshold)

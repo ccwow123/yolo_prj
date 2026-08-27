@@ -32,6 +32,79 @@ def detect_hands(model, frame, conf):
     return result, has_hands
 
 
+class _ScaledBox:
+    """降采样推理后映射回原分辨率的轻量检测框，兼容 calculate_hand_distance。"""
+    __slots__ = ('_xywh', '_conf')
+
+    def __init__(self, cx, cy, w, h, conf):
+        self._xywh = np.array([[cx, cy, w, h]], dtype=np.float32)
+        self._conf = conf
+
+    @property
+    def xywh(self):
+        return self._xywh
+
+    @property
+    def conf(self):
+        return self._conf
+
+
+def detect_hands_scaled(model, frame, conf, max_edge=None, imgsz=None, half=False):
+    """
+    在可选降采样的帧上检测手部，并把检测框坐标映射回原始分辨率。
+
+    推理 FLOPs 近似随模型前向尺寸 imgsz 的平方下降；对 1080p 及以上输入，
+    设置 imgsz（如 480/320）能直接减少网络计算量，比单纯预缩放帧更有效。
+    坐标按缩放比例放大回原图，距离/截图等下游计算的像素语义保持不变。
+
+    Args:
+        model: YOLO模型对象
+        frame: 原始分辨率 BGR 帧
+        conf: 置信度阈值
+        max_edge: 输入帧最长边像素；None 或大于原图最长边时不预缩放
+        imgsz: 模型前向尺寸（如 480、320）；None 用模型默认 imgsz
+        half: 是否启用 FP16 推理（仅 CUDA 生效，新版以 quantize=16 传入）
+
+    Returns:
+        (boxes_list, has_hands):
+            boxes_list: 与原分辨率坐标对齐的轻量框列表，可直接传给 calculate_hand_distance；
+                        未检测到足够的手时为 None
+            has_hands: 是否检测到至少2只手
+    """
+    h_img, w_img = frame.shape[:2]
+    infer_frame = frame
+    if max_edge and max(h_img, w_img) > max_edge:
+        scale = max_edge / max(h_img, w_img)
+        infer_frame = cv2.resize(
+            frame,
+            (max(1, int(w_img * scale)), max(1, int(h_img * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+
+    import torch
+    use_half = half and torch.cuda.is_available()
+    # 新版 ultralytics 以 quantize 取代已废弃的 half；16=FP16，32/省略=FP32
+    kwargs = {'conf': conf}
+    if use_half:
+        kwargs['quantize'] = 16
+    if imgsz:
+        kwargs['imgsz'] = imgsz
+    with torch.no_grad():
+        results = model(infer_frame, verbose=False, **kwargs)
+
+    result = results[0]
+    if result.boxes is None or len(result.boxes) < 2:
+        return None, False
+
+    sx = w_img / infer_frame.shape[1]
+    sy = h_img / infer_frame.shape[0]
+    boxes = []
+    for box in result.boxes:
+        cx, cy, bw, bh = box.xywh[0].tolist()
+        boxes.append(_ScaledBox(cx * sx, cy * sy, bw * sx, bh * sy, float(box.conf)))
+    return boxes, True
+
+
 def calculate_hand_distance(image, boxes):
     """
     计算双手之间的距离并标注图像

@@ -82,13 +82,20 @@ def run_image_detection(model, source, conf, save_dir, save_json, save_annotated
 
     logger.info(f"\n所有结果已保存到 {save_dir}")
 
-def run_video_detection(model, source, conf, save_dir, save_json, save_annotated=True, annotate_video=None):
-    """运行视频检测（使用已加载的 model 对象）"""
+def run_video_detection(model, source, conf, save_dir, save_json, save_annotated=True, annotate_video=None, sample_interval=1):
+    """运行视频检测（使用已加载的 model 对象）
+
+    sample_interval>1 时开启抽帧：仅每隔 N 帧做一次推理，未抽中的帧跳过推理，
+    沿用最近一次标注结果（annotate）或直接复用原帧（不标注）写回输出视频。
+    输出视频始终写入全部帧、保持原帧率；JSON 与汇总只记录实际抽帧推理的真实数据，
+    避免因沿用上一帧结果而重复计数。
+    """
     model.eval()
 
     # annotate_video 默认跟随 save_annotated：不保存标注时跳过逐帧 plot()，只输出原帧
     if annotate_video is None:
         annotate_video = save_annotated
+    sample_interval = max(1, int(sample_interval))
 
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
@@ -108,8 +115,9 @@ def run_video_detection(model, source, conf, save_dir, save_json, save_annotated
     out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
     
     video_results = []
+    last_annotated = None  # 供未抽中帧沿用最近的标注结果
     
-    logger.info(f"正在处理视频: {video_name}")
+    logger.info(f"正在处理视频: {video_name} (抽帧间隔={sample_interval})")
     with tqdm(total=total_frames, desc="处理帧", unit="帧") as pbar:
         frame_count = 0
         while cap.isOpened():
@@ -117,15 +125,24 @@ def run_video_detection(model, source, conf, save_dir, save_json, save_annotated
             if not ret:
                 break
             
-            frame_data, annotated_frame = detect_single_frame(
-                model, frame, conf, 
-                save_dir=save_dir if save_json else None,
-                filename=f'frame_{frame_count:04d}.jpg' if save_json else None,
-                save_json=save_json,
-                annotate=annotate_video
-            )
+            annotated_frame = None
+            if frame_count % sample_interval == 0:
+                # 抽中的帧：真正执行推理
+                frame_data, annotated_frame = detect_single_frame(
+                    model, frame, conf, 
+                    save_dir=save_dir if save_json else None,
+                    filename=f'frame_{frame_count:04d}.jpg' if save_json else None,
+                    save_json=save_json,
+                    save_annotated=save_annotated,
+                    annotate=annotate_video
+                )
+                video_results.append(frame_data)
+                if annotated_frame is not None:
+                    last_annotated = annotated_frame
+            else:
+                # 未抽中的帧：跳过推理，沿用最近的标注结果（缺失时退化为原帧）
+                annotated_frame = last_annotated
             
-            video_results.append(frame_data)
             out.write(annotated_frame if annotated_frame is not None else frame)
             frame_count += 1
             pbar.update(1)
@@ -136,7 +153,7 @@ def run_video_detection(model, source, conf, save_dir, save_json, save_annotated
     
     return video_results
 
-def run_detection(model, model_path, source, conf, save_dir, save_json, save_annotated=True):
+def run_detection(model, model_path, source, conf, save_dir, save_json, save_annotated=True, sample_interval=1):
     """运行检测主函数（model 已加载）
 
     Returns:
@@ -155,7 +172,7 @@ def run_detection(model, model_path, source, conf, save_dir, save_json, save_ann
     with tqdm(total=len(items), desc="处理文件", unit="个") as pbar:
         for path, is_video in items:
             if is_video:
-                video_results = run_video_detection(model, path, conf, save_dir, save_json, save_annotated)
+                video_results = run_video_detection(model, path, conf, save_dir, save_json, save_annotated, sample_interval=sample_interval)
                 if video_results:
                     all_results.extend(video_results)
             else:
@@ -194,6 +211,7 @@ if __name__ == '__main__':
     parser.add_argument('--save-annotated', default=True, action='store_true', help='保存带检测框的图片（默认启用）')
     parser.add_argument('--no-annotated', dest='save_annotated', action='store_false', help='保存原图，不带检测框')
     parser.add_argument('--device', type=str, default='cuda', help='推理设备（例如 cpu 或 cuda）')
+    parser.add_argument('--sample-interval', type=int, default=1, help='视频抽帧间隔，>1 时每隔 N 帧做一次推理，其余帧沿用上一帧标注（仅视频检测生效）')
 
     args = parser.parse_args()
 
@@ -207,4 +225,4 @@ if __name__ == '__main__':
         logger.error("模型加载失败")
         exit(1)
     
-    run_detection(model, args.model, args.source, args.conf, args.save_dir, args.save_json, args.save_annotated)
+    run_detection(model, args.model, args.source, args.conf, args.save_dir, args.save_json, args.save_annotated, args.sample_interval)

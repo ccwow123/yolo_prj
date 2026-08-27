@@ -2,6 +2,36 @@ import cv2
 import numpy as np
 
 
+def frame_mad(frame_a, frame_b, max_edge=96):
+    """
+    计算两帧的平均绝对差（0-255），用于画面运动量检测。
+
+    先将两帧等比缩到小尺寸并灰度化再做 absdiff 求均值，开销极小，
+    适合每帧调用。任一帧为空时返回正无穷（视为变化剧烈）。
+
+    Args:
+        frame_a: BGR 帧 A
+        frame_b: BGR 帧 B
+        max_edge: 比较用图像的最长边像素，越小越快
+
+    Returns:
+        float: 平均绝对差；越大表示运动越明显
+    """
+    if frame_a is None or frame_b is None:
+        return float('inf')
+
+    def prep(img):
+        h, w = img.shape[:2]
+        if max_edge and max(h, w) > max_edge:
+            scale = max_edge / max(h, w)
+            img = cv2.resize(img, (max(1, int(w * scale)), max(1, int(h * scale))))
+        if img.ndim == 3:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        return img.astype(np.float32)
+
+    return float(np.mean(np.abs(prep(frame_a) - prep(frame_b))))
+
+
 def extract_content_contours(gray, blur_kernel=5, canny_low=None, canny_high=None,
                              contour_min_ratio=0.01, close_kernel=15):
     """

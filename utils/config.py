@@ -8,7 +8,7 @@
 DEFAULT_ALBUM_SOURCE = r'E:\储藏室\画册\ss - 副本\[Cuvie] Bitter Addiction [DL版][机翻]'
 
 # hand_distance：示例视频
-DEFAULT_VIDEO_SOURCE = r"D:\cute aggression ういり画集 日版.mp4"
+DEFAULT_VIDEO_SOURCE = r"E:\Download\视频\恋上百合的101天.mp4"
 
 # canny_cut：单图输入
 DEFAULT_CANNY_INPUT = r'C:\Users\Administrator\Desktop\1.png'
@@ -22,3 +22,16 @@ DEFAULT_BOOK_INPUT = r'E:\储藏室\画册\扫描\testbook'
 
 # replace_font_paths：待处理 json 目录
 DEFAULT_FONT_JSON_DIR = r"E:\Share\1\original_images\manga_translator_work\json"
+
+# hand_distance：视频推理输入的最长边像素（预缩放，0/None 表示不缩放）
+DEFAULT_INFER_MAX_EDGE = 1280
+
+# hand_distance：模型前向尺寸（imgsz，直接决定网络 FLOPs；None 用模型默认 640）
+DEFAULT_INFER_IMGSZ = 480
+
+# hand_distance：静止判定阈值（0-255 帧间平均绝对差；帧间运动低于此值视为静止）。
+# >0 时：静止帧复用上次推理并才累计"稳定时长"，运动帧重置计数，保证截图帧清晰静止；0 关闭。
+# 目标机实测：m=20 时截图仍清晰、速度最快(约47帧/s，实时富余)。注意该值已高到几乎把所有帧
+# 判为静止（该片逐帧MAD p99≈24.6），静止门槛近乎失效、近似“只按距离累计+最大复用”，
+# 若今后遇到严格需“静止才截”的片子应下调(如4~6)。
+DEFAULT_MOTION_THRESHOLD = 20.0
