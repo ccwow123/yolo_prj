@@ -1,5 +1,8 @@
 import argparse
 import os
+import queue
+import threading
+
 import cv2
 import numpy as np
 import logging
@@ -16,6 +19,10 @@ from utils.config import DEFAULT_VIDEO_SOURCE, DEFAULT_INFER_MAX_EDGE, DEFAULT_I
 
 # logger
 logger = logging.getLogger(__name__)
+
+# 静止帧复用标注图的严格阈值：仅当当前帧与最近一次推理帧的 MAD 低于此值时才复用整张标注图，
+# 否则仍重绘，避免高 motion_threshold 下输出视频叠加层过度陈旧。
+ANNOT_REUSE_MAD_MAX = 3.0
 
 
 def process_single_image(model, image_path, save_dir, save_txt, crop_ratio=0.3, quality=100, conf=0.6):
@@ -79,7 +86,8 @@ def process_single_image(model, image_path, save_dir, save_txt, crop_ratio=0.3, 
 
 def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400, 
                   stable_duration=1.0, crop_ratio=0.3, quality=80, conf=0.6,
-                  max_edge=None, imgsz=None, fp16=False, motion_threshold=0.0):
+                  max_edge=None, imgsz=None, fp16=False, motion_threshold=0.0,
+                  write_video=True, annotate_video=True):
     """
     处理视频文件，检测手部距离并自动截图
     
@@ -98,6 +106,8 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
         fp16: 是否启用 FP16 混合精度推理（仅 CUDA 生效）
         motion_threshold: 静止判定阈值；>0 时仅静止帧累计稳定时长并复用上次推理，
                           运动帧重置计数（截图帧确保清晰静止），0 关闭按原逐帧逻辑
+        write_video: 是否生成输出视频；False 时跳过整帧标注与写入（纯截图，最快）
+        annotate_video: 输出视频是否叠加检测标注；False 时写原帧不重绘，省每帧拷贝/绘制
     
     Returns:
         dict: 处理结果统计信息
@@ -117,7 +127,10 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     
     video_name = os.path.basename(video_path)
     output_video_path = os.path.join(save_dir, f'hand_distance_{video_name}')
-    out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height), True)
+    out = None
+    if write_video:
+        out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height), True)
+    need_annotated = write_video and annotate_video
     
     screenshots_dir = os.path.join(save_dir, 'screenshots')
     os.makedirs(screenshots_dir, exist_ok=True)
@@ -126,18 +139,33 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
     continue_long_dist_frame, screenshot_count, last_screenshot_frame = 0, 0, -1000
     triggered_frames = []
     last_infer_frame, last_boxes, last_has_hands = None, None, False  # 动态抽帧复用状态
+    last_annotated = None                                          # 静止帧复用标注图
     prev_frame = None  # 用于静止判定（相对上一帧的运动量）
     
     logger.info(f"正在处理视频: {video_name} (FPS={fps}, 距离阈值={distance_threshold}px, 稳定时长={stable_duration}s)")
     
     min_screenshot_interval = int(fps * 0.5)
+
+    # 异步读取：后台线程预取帧，把 1080p 解码从推理主线程解耦
+    frame_queue = queue.Queue(maxsize=4)
+
+    def _frame_reader():
+        while True:
+            ret, f = cap.read()
+            if not ret:
+                frame_queue.put(None)
+                break
+            frame_queue.put(f)
+
+    reader_thread = threading.Thread(target=_frame_reader, daemon=True)
+    reader_thread.start()
     
     with tqdm(total=total_frames, desc="处理帧", unit="帧") as pbar:
         frame_count = 0
         
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
+        while True:
+            frame = frame_queue.get()
+            if frame is None:
                 break
             
             if frame_count == 0:
@@ -147,7 +175,7 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
                 last_screenshot_frame = frame_count
             
             current_distance = None
-            annotated = frame.copy()
+            annotated = None
             
             # 静止判定：相对上一帧无明显运动（motion_threshold<=0 时视为恒静止，保留原逐帧逻辑）
             is_static = True
@@ -155,9 +183,8 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
                 is_static = frame_mad(frame, prev_frame) <= motion_threshold
             
             # 静止帧复用上次推理结果跳过推理，运动帧才真正推理（全帧照常输出与计帧）
-            if is_static and last_infer_frame is not None:
-                boxes, has_hands = last_boxes, last_has_hands
-            else:
+            reusing = is_static and last_infer_frame is not None
+            if not reusing:
                 if max_edge:
                     boxes, has_hands = detect_hands_scaled(model, frame, conf, max_edge=max_edge, imgsz=imgsz, half=fp16)
                 else:
@@ -165,16 +192,24 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
                     boxes = result.boxes if has_hands else None
                 last_infer_frame = frame
                 last_boxes, last_has_hands = boxes, has_hands
+            else:
+                boxes, has_hands = last_boxes, last_has_hands
+            
+            # 仅当当前帧与最近推理帧近乎一致时才复用整张标注图，否则需新绘制
+            can_reuse_annot = (need_annotated and reusing and last_annotated is not None
+                               and frame_mad(frame, last_infer_frame, max_edge=48) <= ANNOT_REUSE_MAD_MAX)
+            draw = need_annotated and not can_reuse_annot
             
             if has_hands:
-                distance, annotated, _ = calculate_hand_distance(frame, boxes)
+                distance, annotated, _ = calculate_hand_distance(frame, boxes, annotate=draw)
                 current_distance = distance
                 distances.append(distance)
                 
                 if distance > distance_threshold and is_static:
                     continue_long_dist_frame += 1
-                    cv2.putText(annotated, f"Count: {continue_long_dist_frame}/{need_frames}", 
-                                (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+                    if annotated is not None:
+                        cv2.putText(annotated, f"Count: {continue_long_dist_frame}/{need_frames}", 
+                                    (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
                     
                     if continue_long_dist_frame >= need_frames:
                         if (frame_count - last_screenshot_frame) >= min_screenshot_interval:
@@ -186,22 +221,38 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
                         continue_long_dist_frame = 0
                 else:
                     continue_long_dist_frame = 0
-                    reason = "Reset - Distance" if distance <= distance_threshold else "Reset - Motion"
-                    cv2.putText(annotated, f"{reason}: {distance:.1f}px", 
-                                (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                    if annotated is not None:
+                        reason = "Reset - Distance" if distance <= distance_threshold else "Reset - Motion"
+                        cv2.putText(annotated, f"{reason}: {distance:.1f}px", 
+                                    (50, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
             else:
-                cv2.putText(annotated, "Insufficient hands detected", 
-                            (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                if draw:
+                    annotated = frame.copy()
+                    cv2.putText(annotated, "Insufficient hands detected", 
+                                (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                 continue_long_dist_frame = 0
             
+            # 有新绘制结果则缓存为复用图
+            if annotated is not None:
+                last_annotated = annotated
+            
             frame_distance_log.append((frame_count, current_distance))
-            out.write(annotated)
+            if out is not None:
+                if annotated is not None:
+                    write_img = annotated
+                elif can_reuse_annot:
+                    write_img = last_annotated
+                else:
+                    write_img = frame
+                out.write(write_img)
             prev_frame = frame
             frame_count += 1
             pbar.update(1)
     
+    reader_thread.join()
     cap.release()
-    out.release()
+    if out is not None:
+        out.release()
     
     logger.info(f"正在去重截图...")
     filtered_frames, removed_frames = deduplicate_screenshots(screenshots_dir, triggered_frames, similarity_threshold=0.8)
@@ -243,7 +294,8 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
                       distance_threshold=1400, stable_duration=1.0, 
                       crop_ratio=0.3, quality=80, list_file=None,
                       max_edge=DEFAULT_INFER_MAX_EDGE, imgsz=DEFAULT_INFER_IMGSZ,
-                      fp16=True, motion_threshold=DEFAULT_MOTION_THRESHOLD):
+                      fp16=True, motion_threshold=DEFAULT_MOTION_THRESHOLD,
+                      write_video=True, annotate_video=True):
     """
     运行手部距离计算主函数
     
@@ -262,6 +314,8 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
         imgsz: 模型前向尺寸（None 用模型默认）
         fp16: 是否启用 FP16 混合精度推理（仅 CUDA 生效）
         motion_threshold: 静止判定阈值，>0 时仅静止帧累计稳定时长并触发截图，0 关闭
+        write_video: 是否生成输出视频（False 时纯截图，不写视频，最快）
+        annotate_video: 输出视频是否叠加检测标注（False 时写原帧）
     
     Returns:
         dict: 汇总统计信息
@@ -284,9 +338,9 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
     if model is None:
         return {'success': False, 'error': '模型加载失败'}
     
-    save_dir = get_next_exp_dir(save_dir) if save_dir else get_next_exp_dir('runs/hand_distance')
-    os.makedirs(save_dir, exist_ok=True)
-    logger.info(f"结果将保存到: {save_dir}")
+    base_dir = save_dir if save_dir else 'runs/hand_distance'
+    os.makedirs(base_dir, exist_ok=True)
+    logger.info(f"结果将保存到: {base_dir} (每个输入文件一个 expN 目录)")
     
     stats = {
         'total_files': 0,
@@ -312,11 +366,14 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
     logger.info(f"待处理: 视频 {stats['video_count']} 个，图片 {stats['image_count']} 个")
 
     for path, is_video in items:
+        out_dir = get_next_exp_dir(base_dir)   # 每个输入文件独立的 expN 目录
+        os.makedirs(out_dir, exist_ok=True)
         if is_video:
-            result = process_video(model, path, save_dir, save_txt, distance_threshold,
+            result = process_video(model, path, out_dir, save_txt, distance_threshold,
                                    stable_duration, crop_ratio, quality, conf,
                                    max_edge=max_edge, imgsz=imgsz, fp16=fp16,
-                                   motion_threshold=motion_threshold)
+                                   motion_threshold=motion_threshold,
+                                   write_video=write_video, annotate_video=annotate_video)
             if result['success']:
                 stats['success_count'] += 1
                 stats['video_results'].append(result)
@@ -324,7 +381,7 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
                 stats['failed_count'] += 1
         else:
             logger.info(f"正在处理图片: {os.path.basename(path)}")
-            result = process_single_image(model, path, save_dir, save_txt, crop_ratio, quality, conf)
+            result = process_single_image(model, path, out_dir, save_txt, crop_ratio, quality, conf)
             if result['success']:
                 stats['success_count'] += 1
             else:
@@ -332,7 +389,7 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
 
     logger.info("所有文件处理完成")
     
-    print_summary(stats, save_dir)
+    print_summary(stats, base_dir)
     
     return stats
 
@@ -369,9 +426,9 @@ if __name__ == '__main__':
     parser.add_argument('--save-dir', type=str, default='runs\\hand_distance', 
                         help='输出目录（未指定时自动递增）')
     parser.add_argument('--no-save-txt', action='store_true', help='不保存距离结果为txt文件')
-    parser.add_argument('--distance-threshold', type=int, default=1400, 
+    parser.add_argument('--distance-threshold', type=int, default=1200, 
                         help='触发截图的距离阈值（像素）')
-    parser.add_argument('--stable-duration', type=float, default=2, 
+    parser.add_argument('--stable-duration', type=float, default=1, 
                         help='触发截图所需的稳定时长（秒）')
     parser.add_argument('--crop-ratio', type=float, default=0.2, 
                         help='图像两边向中央裁剪的总比例（默认0，即不裁剪）')
@@ -385,6 +442,10 @@ if __name__ == '__main__':
                         help='静止判定阈值（0-255 帧间MAD，0 关闭）；仅静止帧累计稳定时长并触发截图')
     parser.add_argument('--no-fp16', dest='fp16', action='store_false', default=True,
                         help='禁用 FP16 混合精度推理（仅 GPU 生效）')
+    parser.add_argument('--no-video', dest='write_video', action='store_false', default=True,
+                        help='不生成输出视频（纯截图，跳过标注与逐帧写入，最快）')
+    parser.add_argument('--no-annotate-video', dest='annotate_video', action='store_false', default=True,
+                        help='输出视频不叠加检测标注，写原帧（省每帧拷贝/绘制）')
     
     args = parser.parse_args()
     

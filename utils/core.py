@@ -20,17 +20,17 @@ def configure_logging(level=logging.INFO, fmt='[%(asctime)s] %(levelname)s: %(me
 def get_next_exp_dir(base_dir='runs/exp'):
     """
     获取下一个实验目录路径（自动递增）
-    
+
     Args:
         base_dir: 基础目录路径
-    
+
     Returns:
-        下一个实验目录的完整路径，格式为 base_dir/exp 或 base_dir/exp1, exp2...
+        下一个实验目录的完整路径，格式为 base_dir/exp1, exp2...（从 exp1 开始）
     """
     os.makedirs(base_dir, exist_ok=True)
-    exp_num = 0
+    exp_num = 1
     while True:
-        exp_dir = os.path.join(base_dir, f"exp{exp_num}" if exp_num > 0 else "exp")
+        exp_dir = os.path.join(base_dir, f"exp{exp_num}")
         if not os.path.exists(exp_dir):
             return exp_dir
         exp_num += 1

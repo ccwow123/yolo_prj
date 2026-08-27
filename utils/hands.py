@@ -105,17 +105,19 @@ def detect_hands_scaled(model, frame, conf, max_edge=None, imgsz=None, half=Fals
     return boxes, True
 
 
-def calculate_hand_distance(image, boxes):
+def calculate_hand_distance(image, boxes, annotate=True):
     """
     计算双手之间的距离并标注图像
 
     Args:
         image: 原始图像（numpy数组）
         boxes: YOLO检测到的边界框列表
+        annotate: 是否在图像上绘制手点/距离标注；False 时只算距离，annotated 为 None，
+                  省去整帧拷贝与绘制开销
 
     Returns:
         distance: 双手之间的像素距离（None如果不足2只手）
-        annotated: 带有标注的图像
+        annotated: 带有标注的图像（annotate=False 时为 None）；不足2只手时返回 image
         hands: 左右手信息列表
     """
     if len(boxes) < 2:
@@ -126,6 +128,9 @@ def calculate_hand_distance(image, boxes):
 
     left_hand, right_hand = hands[0], hands[-1]
     distance = np.sqrt((right_hand['x'] - left_hand['x'])**2 + (right_hand['y'] - left_hand['y'])**2)
+
+    if not annotate:
+        return distance, None, [left_hand, right_hand]
 
     annotated = image.copy()
     cv2.circle(annotated, (int(left_hand['x']), int(left_hand['y'])), 8, (0, 0, 255), -1)
