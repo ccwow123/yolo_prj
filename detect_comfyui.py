@@ -3,7 +3,7 @@ import os
 import shutil
 import json
 from detect import run_detection
-from utils import ComfyUIClient, is_image_file, get_next_exp_dir
+from utils import ComfyUIClient, load_yolo_model
 
 def main():
     parser = argparse.ArgumentParser(description='检测 + ComfyUI 处理流程')
@@ -11,7 +11,7 @@ def main():
     # Detect 参数
     parser.add_argument('--model', type=str, default=r'weights\censor_detect_v1.0_s_0725.pt', 
                         help='模型权重文件路径')
-    parser.add_argument('--source', type=str, default=r'imgs', 
+    parser.add_argument('--source', type=str, default=r'E:\储藏室\画册\ss - 副本\[Cuvie] Bitter Addiction [DL版][机翻]', 
                         help='检测输入目录（文件夹1）')
     parser.add_argument('--conf', type=float, default=0.6, 
                         help='检测置信度阈值')
@@ -23,7 +23,7 @@ def main():
     # ComfyUI 参数
     parser.add_argument('--workflow', type=str, default=r'workflows\f2k-漫画去码-py.json', 
                         help='ComfyUI工作流JSON路径（工作流1）')
-    parser.add_argument('--comfyui-save-dir', type=str, default=r'runs\comfyui_output', 
+    parser.add_argument('--comfyui-save-dir', type=str, default=r'runs\comfyui_output\[Cuvie] Bitter Addiction [DL版][机翻][去码]', 
                         help='ComfyUI结果保存目录（文件夹3）')
     parser.add_argument('--comfyui-server', type=str, default='http://127.0.0.1:8188', 
                         help='ComfyUI服务器地址')
@@ -34,16 +34,21 @@ def main():
     print("检测 + ComfyUI 处理流程")
     print("=" * 60)
     
-    # 获取检测输出目录（使用自动递增的exp目录）
-    detect_output_dir = get_next_exp_dir(args.detect_save_dir)
-    
     # 步骤1: 调用 detect.py 进行推理（保存原图，不带检测框）
     print("\n[步骤1] 运行 YOLO 检测...")
     print(f"  输入目录: {args.source}")
-    print(f"  输出目录: {detect_output_dir}")
     print(f"  保存原图（不带检测框）")
     
-    run_detection(args.model, args.source, args.conf, args.detect_save_dir, args.save_json, save_annotated=False)
+    model, _ = load_yolo_model(args.model)
+    if model is None:
+        print("\n错误：模型加载失败")
+        return
+    
+    detect_output_dir = run_detection(model, args.model, args.source, args.conf, args.detect_save_dir, args.save_json, save_annotated=False)
+    if detect_output_dir is None:
+        print("\n错误：检测未完成，未生成输出目录")
+        return
+    print(f"  输出目录: {detect_output_dir}")
     
     # 步骤2: 读取汇总json，判断哪些图片有检测结果
     summary_path = os.path.join(detect_output_dir, "summary.json")
