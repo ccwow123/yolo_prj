@@ -2,7 +2,13 @@ import os
 import json
 import subprocess
 import tempfile
+import logging
 import cv2
+import torch
+from ultralytics import YOLO
+
+# logger
+logger = logging.getLogger(__name__)
 
 
 def get_next_exp_dir(base_dir='runs/exp'):
@@ -675,3 +681,43 @@ def load_source_list(list_file):
                 continue
             paths.append(p)
     return paths
+
+
+def load_yolo_model(model_path):
+    """
+    加载YOLO模型并选择最佳设备
+
+    Args:
+        model_path: 模型权重文件路径
+
+    Returns:
+        model: 加载好的YOLO模型对象（已移动到合适设备）
+        device_info: 设备信息字符串
+    """
+    try:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = YOLO(model_path).to(device)
+        model.eval()
+        logger.info(f"模型加载成功: {model_path}")
+        
+        actual_device = model.device
+        if actual_device.type == 'cuda':
+            device_info = f"GPU (CUDA) - {torch.cuda.get_device_name(actual_device.index)}"
+            logger.info(f"使用设备: {device_info}")
+        else:
+            device_info = "CPU"
+            logger.info(f"使用设备: {device_info}")
+            if torch.cuda.is_available():
+                logger.warning("CUDA可用但模型仍在CPU上运行，尝试强制移动到GPU")
+                model.cuda()
+                if model.device.type == 'cuda':
+                    device_info = f"GPU (CUDA) - {torch.cuda.get_device_name(model.device.index)}"
+                    logger.info(f"成功移动到GPU: {device_info}")
+            else:
+                logger.info("CUDA不可用")
+        
+        return model, device_info
+    
+    except Exception as e:
+        logger.error(f"模型加载失败: {e}")
+        return None, None

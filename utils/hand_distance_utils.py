@@ -1,9 +1,7 @@
 import os
 import cv2
 import numpy as np
-import torch
 import logging
-from ultralytics import YOLO
 
 # logger
 logger = logging.getLogger(__name__)
@@ -182,46 +180,6 @@ def save_frame_distance_log(save_dir, frame_distance_log, fps):
         f.write("# 帧,时间(秒),距离(px)\n")
         for frame_num, distance in frame_distance_log:
             f.write(f"{frame_num},{frame_num/fps:.3f},{distance:.1f}\n" if distance else f"{frame_num},{frame_num/fps:.3f},-1\n")
-
-
-def load_yolo_model(model_path):
-    """
-    加载YOLO模型并选择最佳设备
-    
-    Args:
-        model_path: 模型权重文件路径
-    
-    Returns:
-        model: 加载好的YOLO模型对象（已移动到合适设备）
-        device_info: 设备信息字符串
-    """
-    try:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = YOLO(model_path).to(device)
-        model.eval()
-        logger.info(f"模型加载成功: {model_path}")
-        
-        actual_device = model.device
-        if actual_device.type == 'cuda':
-            device_info = f"GPU (CUDA) - {torch.cuda.get_device_name(actual_device.index)}"
-            logger.info(f"使用设备: {device_info}")
-        else:
-            device_info = "CPU"
-            logger.info(f"使用设备: {device_info}")
-            if torch.cuda.is_available():
-                logger.warning("CUDA可用但模型仍在CPU上运行，尝试强制移动到GPU")
-                model.cuda()
-                if model.device.type == 'cuda':
-                    device_info = f"GPU (CUDA) - {torch.cuda.get_device_name(model.device.index)}"
-                    logger.info(f"成功移动到GPU: {device_info}")
-            else:
-                logger.info("CUDA不可用")
-        
-        return model, device_info
-    
-    except Exception as e:
-        logger.error(f"模型加载失败: {e}")
-        return None, None
 
 
 def convert_screenshots_to_jpg(screenshots_dir, filtered_frames, output_dir, quality=80):
