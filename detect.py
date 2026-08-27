@@ -5,7 +5,7 @@ import json
 import logging
 from tqdm import tqdm
 
-from utils import get_next_exp_dir, collect_source_items, save_detection_results, load_yolo_model
+from utils import get_next_exp_dir, collect_source_items, save_detection_results, load_yolo_model, configure_logging
 
 # logger
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ def run_video_detection(model, source, conf, save_dir, save_json, save_annotated
 
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
-        print(f"错误：无法打开视频文件 {source}")
+        logger.error(f"错误：无法打开视频文件 {source}")
         return []
     
     fps = int(cap.get(cv2.CAP_PROP_FPS))
@@ -198,7 +198,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # 初始化日志
-    logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
+    configure_logging()
     logger.info(f"使用模型: {args.model}")
 
     # 使用统一的模型加载函数

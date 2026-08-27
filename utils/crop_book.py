@@ -4,6 +4,7 @@ import cv2
 
 from utils import get_next_exp_dir, collect_source_items, imread_unicode
 from utils.cv import book_contour_bbox
+from utils.config import DEFAULT_BOOK_INPUT
 
 
 def crop_book_image(image, bbox, margin=0):
@@ -74,7 +75,7 @@ def process_single(image_path, output_dir, margin=None, min_ratio=0.15, debug=Fa
 
 def main():
     parser = argparse.ArgumentParser(description='图片裁剪优化：识别张开的书籍并轴对齐裁剪输出')
-    parser.add_argument('--input',default=r'E:\储藏室\画册\扫描\testbook',
+    parser.add_argument('--input',default=DEFAULT_BOOK_INPUT,
                         help='单张图片路径或一个目录')
     parser.add_argument('--output', type=str, default=None,
                         help='输出目录，默认 runs/crop_book（自动递增防覆盖）')

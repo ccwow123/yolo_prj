@@ -12,6 +12,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from utils.config import DEFAULT_FONT_JSON_DIR
+
 
 def replace_font_paths(data: Any, old_font: str, new_font: str) -> tuple[bool, int]:
     """递归使用正则表达式模式替换 font_path 字段的值。"""
@@ -87,7 +89,7 @@ def main() -> None:
     parser.add_argument("new_font", nargs="?", default="Arial", 
                         help="替换后的字体名称，例如：Arial-Unicode-Regular")
     parser.add_argument("target", nargs="?", 
-                        default=r"E:\Share\1\original_images\manga_translator_work\json", 
+                        default=DEFAULT_FONT_JSON_DIR, 
                         help="目标 JSON 文件或目录路径")
 
     # 解析命令行参数

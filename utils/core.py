@@ -12,6 +12,11 @@ from ultralytics import YOLO
 logger = logging.getLogger(__name__)
 
 
+def configure_logging(level=logging.INFO, fmt='[%(asctime)s] %(levelname)s: %(message)s'):
+    """统一日志初始化，各 CLI 入口调用以复用相同格式/级别。"""
+    logging.basicConfig(level=level, format=fmt, force=True)
+
+
 def get_next_exp_dir(base_dir='runs/exp'):
     """
     获取下一个实验目录路径（自动递增）

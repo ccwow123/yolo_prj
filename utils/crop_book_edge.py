@@ -5,6 +5,7 @@ import numpy as np
 
 from utils import get_next_exp_dir, collect_source_items, imread_unicode
 from utils.cv import build_book_mask
+from utils.config import DEFAULT_BOOK_INPUT
 
 
 def find_edges(mask, min_support=0.5, band_ratio=0.24):
@@ -160,7 +161,7 @@ def process_single(image_path, output_dir, margin=0, min_support=0.5, debug=Fals
 def main():
     parser = argparse.ArgumentParser(
         description='图片裁剪优化：逆时针逐边找书页外边缘并裁剪（找不到边则保留原图）')
-    parser.add_argument('--input', default=r'E:\储藏室\画册\扫描\testbook',
+    parser.add_argument('--input', default=DEFAULT_BOOK_INPUT,
                         help='单张图片路径或一个目录')
     parser.add_argument('--output', type=str, default=None,
                         help='输出目录，默认 runs/crop_book_edge（自动递增防覆盖）')

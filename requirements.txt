@@ -1,0 +1,15 @@
+# 项目 Python 依赖（精确固定版本）
+# 说明：
+#   - 这是 YOLO 检测/分割 + ComfyUI 交互 + OpenCV 处理所需依赖。
+#   - 本清单按"推荐稳定版本集"写死 ==；若你的运行环境已装别的版本，请以
+#     `python -m pip freeze > requirements.txt` 覆盖为实际版本后再继续。
+#   - GPU 环境装 torch 请用官方 CUDA 索引，例如：
+#       pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
+
+torch==2.5.1
+torchvision==0.20.1
+ultralytics==8.3.66
+opencv-python==4.10.0.84
+numpy==1.26.4
+Pillow==10.4.0
+tqdm==4.66.5

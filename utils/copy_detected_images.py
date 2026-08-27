@@ -3,6 +3,8 @@ import os
 import json
 import shutil
 
+from utils.config import DEFAULT_DETECT_SOURCE_DIR, DEFAULT_DETECT_TARGET_DIR
+
 def load_summary(summary_path):
     """加载summary.json文件"""
     with open(summary_path, 'r', encoding='utf-8') as f:
@@ -90,8 +92,8 @@ def copy_detected_images(summary_path, source_dir, target_dir, classes=None, min
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='从summary.json筛选并复制检测到目标的图片')
     parser.add_argument('--summary', type=str, default=r'runs\detections\exp\summary.json', help='summary.json文件路径')
-    parser.add_argument('--source-dir', type=str, default=r'E:\Share\剩下', help='原始图片所在目录')
-    parser.add_argument('--target-dir', type=str, default=r'E:\Share\剩下\detected', help='目标文件夹路径')
+    parser.add_argument('--source-dir', type=str, default=DEFAULT_DETECT_SOURCE_DIR, help='原始图片所在目录')
+    parser.add_argument('--target-dir', type=str, default=DEFAULT_DETECT_TARGET_DIR, help='目标文件夹路径')
     parser.add_argument('--classes', type=str, default=None, help='要筛选的类别，多个类别用[x,y,z]格式，None表示检测到任何结果都复制')
     parser.add_argument('--min-detections', type=int, default=1, help='最小检测数量（默认1）')
     

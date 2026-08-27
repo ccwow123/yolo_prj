@@ -5,6 +5,7 @@ import numpy as np
 
 from utils import get_next_exp_dir, collect_source_items, imread_unicode
 from utils.cv import build_book_mask
+from utils.config import DEFAULT_BOOK_INPUT
 
 
 def order_corners(pts):
@@ -175,7 +176,7 @@ def process_single(image_path, output_dir, rectify=True, margin=None,
 def main():
     parser = argparse.ArgumentParser(
         description='图片裁剪优化：按书籍四角（不足则两角）裁剪，可透视校正')
-    parser.add_argument('--input', default=r'E:\储藏室\画册\扫描\testbook',
+    parser.add_argument('--input', default=DEFAULT_BOOK_INPUT,
                         help='单张图片路径或一个目录')
     parser.add_argument('--output', type=str, default=None,
                         help='输出目录，默认 runs/crop_book_corner（自动递增防覆盖）')

@@ -11,6 +11,7 @@ from utils import (
     deduplicate_screenshots, save_distance_summary, save_frame_distance_log,
     load_yolo_model, convert_screenshots_to_jpg
 )
+from utils.config import DEFAULT_VIDEO_SOURCE
 
 # logger
 logger = logging.getLogger(__name__)
@@ -326,7 +327,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部距离计算器（自动截图）')
     parser.add_argument('--model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt', 
                         help='手部检测模型权重路径')
-    parser.add_argument('--source', type=str, default=r"D:\cute aggression ういり画集 日版.mp4", 
+    parser.add_argument('--source', type=str, default=DEFAULT_VIDEO_SOURCE, 
                         help='源目录、图片路径或视频文件路径')
     parser.add_argument('--list-file', type=str, default=None,
                         help='从txt文件批量导入源路径（每行一个，支持#注释和空行），优先于--source')

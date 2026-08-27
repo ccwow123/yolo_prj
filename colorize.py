@@ -4,6 +4,7 @@ import shutil
 import logging
 from tqdm import tqdm
 from utils import ComfyUIClient, is_grayscale, collect_source_items
+from utils.config import DEFAULT_ALBUM_SOURCE
 
 # logger
 logger = logging.getLogger(__name__)
@@ -13,7 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description='图像上色处理流程')
     
     # 输入输出参数
-    parser.add_argument('--source', type=str, default=r'E:\储藏室\画册\ss - 副本\[Cuvie] Bitter Addiction [DL版][机翻]', 
+    parser.add_argument('--source', type=str, default=DEFAULT_ALBUM_SOURCE, 
                         help='输入目录或图像文件路径（文件夹1）')
     parser.add_argument('--output', type=str, default='runs', 
                         help='输出目录（文件夹2）')

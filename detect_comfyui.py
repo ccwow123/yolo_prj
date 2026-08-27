@@ -3,6 +3,7 @@ import os
 import shutil
 from detect import run_detection
 from utils import ComfyUIClient, load_yolo_model
+from utils.config import DEFAULT_ALBUM_SOURCE
 
 '''
 这个脚本用于检测漫画输入目录（文件夹1）中的图片，
@@ -21,7 +22,7 @@ def main():
     # Detect 参数
     parser.add_argument('--model', type=str, default=r'weights\censor_detect_v1.0_s_0725.pt', 
                         help='模型权重文件路径')
-    parser.add_argument('--source', type=str, default=r'E:\储藏室\画册\ss - 副本\[Cuvie] Bitter Addiction [DL版][机翻]', 
+    parser.add_argument('--source', type=str, default=DEFAULT_ALBUM_SOURCE, 
                         help='检测输入目录（文件夹1）')
     parser.add_argument('--conf', type=float, default=0.6, 
                         help='检测置信度阈值')

@@ -4,6 +4,7 @@ import os
 import argparse
 
 from utils import get_next_exp_dir, imread_unicode
+from utils.config import DEFAULT_CANNY_INPUT
 
 # Global variables for interactive mode
 img = None
@@ -240,7 +241,7 @@ def batch_process(input_dir, output_dir, ratio=0.2):
 
 def main():
     parser = argparse.ArgumentParser(description='Comic Book Page Rectification')
-    parser.add_argument('--input', type=str, default = r'C:\Users\Administrator\Desktop\1.png', help='Input image or directory')
+    parser.add_argument('--input', type=str, default = DEFAULT_CANNY_INPUT, help='Input image or directory')
     parser.add_argument('--output', type=str, default='./runs/output', help='Output path or directory')
     parser.add_argument('--tune', default='True', help='Interactive parameter tuning')
     parser.add_argument('--crop', type=float, default=0, help='Side crop ratio (0.0 = no crop, 0.5 = crop half)')
