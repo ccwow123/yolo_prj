@@ -1,0 +1,10 @@
+# Florence-2 自动标注类别配置
+# 顺序决定 class_id（从 0 开始），请按你的目标类别编辑。
+# names: 显示名（用于标签与预览框上的文字）
+# prompts: 传给 Florence-2 的检测提示词（可选，缺省用 names）；
+#           共享提示会一次框出全部类别。提示词建议用简洁名词/短语。
+names:
+  - hand
+
+prompts:
+  - hand

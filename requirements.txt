@@ -13,3 +13,11 @@ opencv-python==4.10.0.84
 numpy==1.26.4
 Pillow==10.4.0
 tqdm==4.66.5
+
+# ---- Florence-2 自动标注（auto_label.py）----
+# 版本未写死：Florence-2 走 transformers 官方集成，版本需与你环境已装 torch 兼容；
+# 旧版本(4.x)若 API 变化导致 post_process_generation 报错，可 pin 到 e.g. transformers==4.49.0。
+transformers>=4.49.0
+timm
+einops
+# 权重用 safetensors 格式（Florence-2 官方即此格式，无需额外安装）

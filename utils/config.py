@@ -35,3 +35,23 @@ DEFAULT_INFER_IMGSZ = None
 # 判为静止（该片逐帧MAD p99≈24.6），静止门槛近乎失效、近似“只按距离累计+最大复用”，
 # 若今后遇到严格需“静止才截”的片子应下调(如4~6)。
 DEFAULT_MOTION_THRESHOLD = 4
+
+# auto_label：Florence-2 模型本地仓库目录（含 config.json + model.safetensors，
+# 从 HuggingFace 下载 microsoft/Florence-2-base 或 Florence-2-large 后放到这里）
+DEFAULT_FLORENCE2_MODEL = r'weights\Florence-2-base'
+# auto_label：Florence-2 OVD 输出中过滤"退化点框"的最小归一化边长。
+# 模型对无目标背景偶尔吐出接近图像原点(0,0)、边长<0.1% 的无效小框，score 恒为 1
+# 无法用置信度过滤，须按尺寸剔除；0.005 = 图像边长 0.5%，真实目标远大于此。
+DEFAULT_MIN_BOX_SIZE = 0.005
+
+# auto_label：类别定义 yaml（顺序决定 class_id，从 0 开始）
+DEFAULT_FLORENCE2_CLASSES = r'classes.yaml'
+
+# auto_label：默认置信度阈值（Florence-2 开放词汇检测分数通常偏低，0.35 较合理）
+DEFAULT_FLORENCE2_CONF = 0.35
+
+# auto_label：输入目录
+DEFAULT_FLORENCE2_INPUT_DIR = r"C:\Users\Administrator\Desktop\新建文件夹"
+
+# auto_label：结果父目录，每个输入生成独立 expN 子目录
+DEFAULT_FLORENCE2_SAVE_DIR = r'runs\florence_labels'

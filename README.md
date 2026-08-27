@@ -13,6 +13,10 @@
 - ✅ 截图去重：使用ORB特征匹配去除相似截图
 - ✅ 画册比例计算：根据截图时的双手距离计算画册所占比例
 - ✅ ComfyUI集成：支持检测后自动调用ComfyUI处理
+- ✅ 加速推理：模型前向尺寸缩放(`--imgsz`) + FP16混合精度(`--no-fp16`关闭)，大幅降低网络FLOPs
+- ✅ 静止帧截取：帧间运动检测(`--motion-threshold`)，仅画面静止时才累计稳定时长并触发清晰截图
+- ✅ 异步读帧：后台线程预取视频帧，把解码从推理主线程解耦
+- ✅ 结果目录隔离：目录/txt批量输入时每个文件输出到独立的 `expN` 目录，互不覆盖
 
 ## 安装依赖
 
@@ -68,7 +72,7 @@ python detect.py --source imgs/ --device cpu
 
 ### 2. hand_distance.py - 手部距离计算器
 
-检测手部并计算双手距离，超过阈值自动截图。
+检测手部并计算双手距离，超过阈值且画面静止时自动截图。内置多项加速（异步读帧、静止帧复用推理、FP16、前向尺寸缩放）。
 
 #### 命令行参数
 
@@ -76,13 +80,20 @@ python detect.py --source imgs/ --device cpu
 |------|------|--------|------|
 | `--model` | string | `./weights/ultralytics/hand_yolov8n.pt` | 手部检测模型权重路径 |
 | `--source` | string | - | 源目录、图片路径或视频文件路径 |
+| `--list-file` | string | None | 从txt批量导入源路径（每行一个，支持`#`注释和空行），优先于`--source` |
 | `--conf` | float | 0.6 | 置信度阈值 |
-| `--save-dir` | string | `runs/hand_distance` | 输出目录 |
+| `--save-dir` | string | `runs/hand_distance` | 输出父目录，每个输入文件生成独立的 `expN` 子目录 |
 | `--no-save-txt` | flag | False | 不保存距离结果为txt文件 |
-| `--distance-threshold` | int | 1500 | 触发截图的距离阈值（像素） |
-| `--stable-duration` | float | 2.0 | 触发截图所需的稳定时长（秒） |
+| `--distance-threshold` | int | 1200 | 触发截图的距离阈值（像素） |
+| `--stable-duration` | float | 1.0 | 触发截图所需的稳定时长（秒） |
 | `--crop-ratio` | float | 0.2 | 图像两边向中央裁剪的总比例 |
 | `--quality` | int | 100 | 图像压缩质量（1-100） |
+| `--max-edge` | int | 1280 | 视频输入帧最长边像素（0 表示不预缩放），坐标映射回原分辨率 |
+| `--imgsz` | int | 480 | 模型前向尺寸，直接决定网络FLOPs（0 用模型默认640） |
+| `--motion-threshold` | float | 6.0 | 静止判定阈值（0-255帧间MAD，0关闭）；仅静止帧累计稳定时长并触发截图 |
+| `--no-fp16` | flag | False | 禁用FP16混合精度推理（仅GPU生效） |
+| `--no-video` | flag | False | 不生成输出视频（纯截图，跳过逐帧写入，最快） |
+| `--no-annotate-video` | flag | False | 输出视频不叠加检测标注，写原帧（省每帧拷贝/绘制） |
 
 #### 使用示例
 
@@ -93,8 +104,11 @@ python hand_distance.py --source input.mp4
 # 处理图片文件
 python hand_distance.py --source input.jpg
 
-# 处理目录中的所有文件
+# 处理目录中的所有文件（每个文件独立expN目录）
 python hand_distance.py --source ./images/
+
+# 从txt文件批量处理
+python hand_distance.py --list-file list.txt
 
 # 设置自定义距离阈值
 python hand_distance.py --source input.mp4 --distance-threshold 1500
@@ -102,8 +116,11 @@ python hand_distance.py --source input.mp4 --distance-threshold 1500
 # 设置裁剪比例（左右各裁剪15%，总共裁剪30%）
 python hand_distance.py --source input.mp4 --crop-ratio 0.3
 
-# 设置压缩质量
-python hand_distance.py --source input.mp4 --quality 90
+# 开启静止帧截取（画面静止才截图，更清晰）
+python hand_distance.py --source input.mp4 --motion-threshold 6
+
+# 极致加速：纯截图，不写视频
+python hand_distance.py --source input.mp4 --no-video --no-annotate-video
 ```
 
 ### 3. detect_comfyui.py - 检测 + ComfyUI 处理流程
@@ -164,6 +181,47 @@ python train.py
 
 > **注意**：需要在Ultralytics平台注册账号并获取API Key，替换脚本中的 `ULTRALYTICS_API_KEY`。
 
+### 5. auto_label.py - Florence-2 自动标注
+
+用 Florence-2 开放词汇检测把原始图片批量标注成 YOLO 数据集标签（坐标转归一化 `class_id cx cy w h`），一次共享提示框出全部类别。类别与提示词由 `classes.yaml` 定义。复用 `utils/core.py` 的收集/目录/logging 工具，无重复轮子。
+
+#### 前置准备
+
+1. 安装依赖（torchg 环境：`pip install transformers timm einops`）
+2. 手动下载 Florence-2 safetensors 权重（`microsoft/Florence-2-base` 或 `-large`）到 `weights/florence2/` 目录
+3. 编辑 `classes.yaml` 填入你的目标类别与提示词（顺序决定 class_id）
+
+#### 命令行参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--model` | string | `weights/florence2/Florence-2-base` | Florence-2 模型本地目录 |
+| `--source` | string | `imgs` | 待标注图片目录/单图/txt列表 |
+| `--classes` | string | `classes.yaml` | 类别定义yaml |
+| `--conf` | float | 0.35 | 置信度阈值 |
+| `--save-dir` | string | `runs/florence_labels` | 结果父目录，每次生成独立 expN |
+| `--device` | string | `cuda` | 推理设备 |
+| `--no-fp16` | flag | False | 禁用FP16推理（仅GPU生效） |
+
+#### 使用示例
+
+```bash
+python auto_label.py --source imgs --classes classes.yaml
+python auto_label.py --source ./raw --model weights/florence2/Florence-2-base --conf 0.3
+```
+
+#### 输出结构
+
+```
+runs/florence_labels/exp1/
+├── labels/<img>.txt      # YOLO 标签（class_id cx cy w h）
+├── images/               # 拷贝的原图（与cbook参考数据集结构一致）
+├── previews/<img>.png    # 带框预览图（人工抽检）
+├── data.yaml             # 供 train.py 直接引用
+├── summary.json          # 汇总（含每图检测明细）
+└── classes.yaml 语义等同   # 类别映射见 classes 配置
+```
+
 ## 输出结果
 
 ### detect.py 输出
@@ -178,14 +236,21 @@ runs/detections/exp*/
 
 ### hand_distance.py 输出
 
+每个输入文件一个独立的 `expN` 目录（从 `exp1` 开始递增）：
+
 ```
-runs/hand_distance/exp*/
-├── hand_distance_<video_name>.mp4  # 处理后的视频（仅视频输入）
-├── screenshots/                    # 截图目录
+runs/hand_distance/exp1/            # 第一个输入文件的结果目录
+├── hand_distance_<video_name>.mp4  # 处理后的视频（仅视频输入且未用 --no-video）
+├── screenshots/                    # 原始截图目录
 │   ├── screenshot_000000.png
 │   └── ...
-├── distance_summary.txt            # 距离统计摘要
-└── frame_distance_log.txt          # 每帧距离日志
+├── <video_name>/                   # 去重后精选截图
+│   ├── screenshot_000123.jpg
+│   └── ...
+├── distance_summary.txt            # 距离统计摘要（--no-save-txt 关闭）
+└── frame_distance_log.txt          # 每帧距离日志（--no-save-txt 关闭）
+runs/hand_distance/exp2/            # 第二个输入文件的结果目录
+...
 ```
 
 ### detect_comfyui.py 输出
@@ -216,9 +281,21 @@ runs/comfyui_output/            # ComfyUI处理结果目录
 
 1. **手部检测**：使用YOLOv8模型检测图像中的手部目标
 2. **距离计算**：提取左右手部的中心点坐标，计算欧氏距离
-3. **稳定检测**：当距离超过阈值时开始计数，连续稳定指定时长后触发截图
+3. **稳定检测**：当距离超过阈值时开始计数，连续稳定指定时长后触发截图；配合 `--motion-threshold` 仅在画面静止时累计，保证截图帧清晰
 4. **截图去重**：使用ORB特征匹配算法去除相似截图
 5. **画册比例**：根据截图时的双手距离平均值除以图像宽度计算画册所占比例
+
+### 加速原理
+
+| 手段 | 说明 |
+|------|------|
+| 前向尺寸缩放（`--imgsz`） | 模型推理FLOPs近似随前向尺寸的平方下降，`imgsz=480` 相比默认640明显提速 |
+| FP16混合精度（默认开启） | GPU上用半精度推理，速度接近翻倍；`--no-fp16` 可关闭 |
+| 静止帧复用推理 | 画面静止帧跳过重复推理，直接复用上次检测框与标注图 |
+| 异步读帧 | 后台线程预取解码帧，把I/O从推理主线程解耦 |
+| 关视频输出（`--no-video`） | 跳过逐帧写入，纯截图最快路径 |
+
+> **调参建议**：`motion_threshold` 越大判定越宽松（速度越快），但为保证"画面静止才截图"应配合实际素材微调；实测 `motion_threshold=20` 比 `6` 快约15%，若素材对静止门槛要求不高可适当上调。
 
 ## 许可证
 
