@@ -4,11 +4,11 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from .utils import get_next_exp_dir, load_yolo_model
+from .utils import get_next_exp_dir, load_yolo_model, imread_unicode
 
 def remove_hands(image_path, model, conf=0.4, book_width_ratio=0.0, min_area=5000, 
                  max_area=100000, aspect_ratio_range=(0.3, 3.0), visualize_mask=False):
-    img = cv2.imread(image_path)
+    img = imread_unicode(image_path)
     if img is None:
         raise ValueError(f"无法读取图片: {image_path}")
     
@@ -145,7 +145,7 @@ def process_folder(input_dir, output_dir, model_path, conf=0.4, book_width_ratio
                 cv2.imwrite(mask_path, mask)
                 
                 if visualize:
-                    original = cv2.imread(input_path)
+                    original = imread_unicode(input_path)
                     comparison = create_comparison(original, img_no_hand, mask)
                     comparison_path = os.path.join(compare_dir, f"{name}_compare.png")
                     cv2.imwrite(comparison_path, comparison)

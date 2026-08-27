@@ -683,6 +683,57 @@ def load_source_list(list_file):
     return paths
 
 
+def collect_source_items(source, list_file=None, image_only=False):
+    """
+    收集待处理的媒体文件列表，统一处理单文件/目录/txt列表三种来源。
+
+    Args:
+        source: 目录路径或媒体文件路径（list_file 为空时必填）
+        list_file: 可选，txt文件路径（每行一个路径，优先生效）
+        image_only: True 时仅收集图片文件
+
+    Returns:
+        items: [(path, is_video), ...] 列表
+        error: 错误信息字符串，无错误时为 None
+    """
+    if not image_only:
+        def match(p):
+            return is_image_file(p) or is_video_file(p)
+    else:
+        def match(p):
+            return is_image_file(p)
+
+    def to_item(path):
+        return (path, (not image_only) and is_video_file(path))
+
+    if list_file:
+        try:
+            sources = load_source_list(list_file)
+        except FileNotFoundError as e:
+            return [], str(e)
+        items = []
+        for p in sources:
+            if os.path.isfile(p):
+                items.append(to_item(p))
+            else:
+                logger.warning(f"跳过（路径不存在或不是文件）: {p}")
+        if not items:
+            return [], f"txt文件中没有有效的媒体文件路径: {list_file}"
+        return items, None
+
+    if os.path.isfile(source):
+        return [to_item(source)], None
+    if os.path.isdir(source):
+        files = sorted(
+            f for f in os.listdir(source)
+            if os.path.isfile(os.path.join(source, f)) and match(f)
+        )
+        if not files:
+            return [], f"目录中没有找到媒体文件: {source}"
+        return [to_item(os.path.join(source, f)) for f in files], None
+    return [], f"源文件/目录不存在: {source}"
+
+
 def load_yolo_model(model_path):
     """
     加载YOLO模型并选择最佳设备

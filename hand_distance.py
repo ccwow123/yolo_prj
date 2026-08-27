@@ -6,7 +6,7 @@ import logging
 from tqdm import tqdm
 
 from utils import (
-    get_next_exp_dir, is_video_file, is_image_file, validate_parameters, load_source_list,
+    get_next_exp_dir, validate_parameters, collect_source_items, imread_unicode,
     detect_hands, calculate_hand_distance, crop_image, save_screenshot,
     deduplicate_screenshots, save_distance_summary, save_frame_distance_log,
     load_yolo_model, convert_screenshots_to_jpg
@@ -32,7 +32,7 @@ def process_single_image(model, image_path, save_dir, save_txt, crop_ratio=0.3, 
     Returns:
         dict: 处理结果信息（包含距离、是否成功等）
     """
-    image = cv2.imread(image_path)
+    image = imread_unicode(image_path)
     if image is None:
         logger.error(f"无法读取图片: {image_path}")
         return {'success': False, 'error': '无法读取图片', 'filename': os.path.basename(image_path)}
@@ -265,35 +265,12 @@ def run_hand_distance(model_path, source, conf, save_dir, save_txt,
     }
     
     # 收集待处理的 (路径, 是否视频) 列表
-    items = []
+    items, error = collect_source_items(source, list_file=list_file)
+    if error:
+        logger.error(str(error))
+        return {'success': False, 'error': error}
     if list_file:
-        try:
-            sources = load_source_list(list_file)
-        except FileNotFoundError as e:
-            logger.error(str(e))
-            return {'success': False, 'error': 'txt文件不存在'}
-        for path in sources:
-            if os.path.isfile(path):
-                items.append((path, is_video_file(path)))
-            else:
-                logger.warning(f"跳过（路径不存在或不是文件）: {path}")
-        if not items:
-            logger.error(f"txt文件中没有有效的文件路径: {list_file}")
-            return {'success': False, 'error': 'txt中没有有效路径'}
         logger.info(f"从txt导入 {len(items)} 个文件: {list_file}")
-    elif os.path.isfile(source):
-        items.append((source, is_video_file(source)))
-    elif os.path.isdir(source):
-        files = [f for f in os.listdir(source)
-                 if os.path.isfile(os.path.join(source, f))
-                 and (is_image_file(f) or is_video_file(f))]
-        if not files:
-            logger.warning(f"目录为空: {source}")
-            return {'success': False, 'error': '目录为空'}
-        items = [(os.path.join(source, f), is_video_file(os.path.join(source, f))) for f in files]
-    else:
-        logger.error(f"源文件/目录不存在: {source}")
-        return {'success': False, 'error': '源文件/目录不存在'}
 
     stats['total_files'] = len(items)
     stats['video_count'] = sum(1 for _, is_video in items if is_video)

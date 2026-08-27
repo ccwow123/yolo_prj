@@ -3,6 +3,8 @@ import numpy as np
 import os
 import argparse
 
+from utils import get_next_exp_dir, imread_unicode
+
 # Global variables for interactive mode
 img = None
 window_name = "Comic Book Rectification"
@@ -160,7 +162,7 @@ def interactive_mode(image_path, output_path, ratio=0.2):
         print(f"Error: File not found - {image_path}")
         return
     
-    img = cv2.imread(image_path)
+    img = imread_unicode(image_path)
     if img is None:
         print(f"Error: Cannot read image - {image_path}")
         return
@@ -221,7 +223,7 @@ def batch_process(input_dir, output_dir, ratio=0.2):
         name = os.path.splitext(filename)[0]
         output_path = os.path.join(output_dir, f"{name}_rect.jpg")
         
-        image = cv2.imread(input_path)
+        image = imread_unicode(input_path)
         if image is None:
             print(f"  ✗ {filename} - Cannot read")
             continue
@@ -257,9 +259,9 @@ def main():
         return
     
     if os.path.isdir(args.input):
-        batch_process(args.input, args.output, args.crop)
+        batch_process(args.input, get_next_exp_dir(args.output), args.crop)
     else:
-        image = cv2.imread(args.input)
+        image = imread_unicode(args.input)
         if image is None:
             print(f"Error: Cannot read image - {args.input}")
             return

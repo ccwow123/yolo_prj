@@ -4,6 +4,8 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
+from utils import get_next_exp_dir, imread_unicode
+
 def crop_center(image, ratio=0.5):
     height, width = image.shape[:2]
     new_width = int(width * ratio)
@@ -46,8 +48,8 @@ def orb_distance(image1, image2, use_center=False, center_ratio=0.5):
     return 1.0 - similarity
 
 def compare_images(img_path1, img_path2, threshold=0.7, use_center=False, center_ratio=0.5):
-    img1 = cv2.imread(img_path1)
-    img2 = cv2.imread(img_path2)
+    img1 = imread_unicode(img_path1)
+    img2 = imread_unicode(img_path2)
     
     if img1 is None:
         print(f"错误：无法读取图片 {img_path1}")
@@ -80,7 +82,7 @@ def filter_unique_images(input_dir, output_dir, threshold=0.7, use_center=False,
     images = {}
     for filename in tqdm(files, desc="正在加载图片", unit="张"):
         filepath = os.path.join(input_dir, filename)
-        img = cv2.imread(filepath)
+        img = imread_unicode(filepath)
         if img is not None:
             images[filename] = img
     
@@ -115,7 +117,7 @@ def filter_unique_images(input_dir, output_dir, threshold=0.7, use_center=False,
         dst_path = os.path.join(output_dir, filename)
         
         if os.path.exists(src_path):
-            img = cv2.imread(src_path)
+            img = imread_unicode(src_path)
             if img is not None:
                 cv2.imwrite(dst_path, img)
                 saved_count += 1
@@ -163,11 +165,8 @@ def run_similarity_check(args):
             print(f"是否相似: {result['is_similar']}")
     
     elif args.filter_unique:
-        if not args.output:
-            print("请指定 --output 输出目录")
-            return
-        
-        filter_unique_images(args.filter_unique, args.output, args.threshold, args.use_center, args.center_ratio)
+        output_dir = args.output or get_next_exp_dir('runs/filter_unique')
+        filter_unique_images(args.filter_unique, output_dir, args.threshold, args.use_center, args.center_ratio)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='使用 ORB 算法进行图片相似度检测')
@@ -175,14 +174,14 @@ if __name__ == '__main__':
     parser.add_argument('--compare', nargs=2, metavar=('图片1', '图片2'),
                         help='比较两张图片的相似度')
     
-    parser.add_argument('--filter-unique', type=str, default=r'runs\hand_distance\exp6\screenshots',
+    parser.add_argument('--filter-unique', type=str, default=None,
                         help='输入图片目录')
     
     parser.add_argument('--threshold', type=float, default=0.8,
                         help='相似度距离阈值 (0.0=完全相同, 1.0=完全不同)')
     
-    parser.add_argument('--output', type=str, default=r'runs\hand_distance\exp6\filtered',
-                        help='结果输出目录')
+    parser.add_argument('--output', type=str, default=None,
+                        help='结果输出目录，默认 runs/filter_unique（自动递增防覆盖）')
     
     parser.add_argument('--use-center', action='store_true',
                         help='使用图片中心区域进行相似度检测')

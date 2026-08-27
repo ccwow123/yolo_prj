@@ -3,7 +3,7 @@ import os
 import shutil
 import logging
 from tqdm import tqdm
-from utils import ComfyUIClient, is_image_file, is_grayscale
+from utils import ComfyUIClient, is_grayscale, collect_source_items
 
 # logger
 logger = logging.getLogger(__name__)
@@ -42,23 +42,11 @@ def main():
     os.makedirs(args.output, exist_ok=True)
     
     # 获取所有图像文件（支持单个文件或目录）
-    image_paths = []
-    if os.path.isfile(args.source):
-        if is_image_file(args.source):
-            image_paths = [args.source]
-        else:
-            logger.error(f"不是有效的图片文件: {args.source}")
-            return
-    elif os.path.isdir(args.source):
-        image_paths = [
-            os.path.join(args.source, f)
-            for f in os.listdir(args.source)
-            if os.path.isfile(os.path.join(args.source, f)) and is_image_file(f)
-        ]
-    else:
-        logger.error(f"无效的输入路径: {args.source}")
+    items, error = collect_source_items(args.source, image_only=True)
+    if error:
+        logger.error(str(error))
         return
-    
+    image_paths = [p for p, _ in items]
     if not image_paths:
         logger.error("没有找到有效的图片文件")
         return

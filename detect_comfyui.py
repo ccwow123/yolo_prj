@@ -1,7 +1,6 @@
 import argparse
 import os
 import shutil
-import json
 from detect import run_detection
 from utils import ComfyUIClient, load_yolo_model
 
@@ -55,25 +54,17 @@ def main():
         print("\n错误：模型加载失败")
         return
     
-    detect_output_dir = run_detection(model, args.model, args.source, args.conf, args.detect_save_dir, args.save_json, save_annotated=False)
+    detect_output_dir, results = run_detection(model, args.model, args.source, args.conf, args.detect_save_dir, args.save_json, save_annotated=False)
     if detect_output_dir is None:
         print("\n错误：检测未完成，未生成输出目录")
         return
     print(f"  输出目录: {detect_output_dir}")
     
-    # 步骤2: 读取汇总json，判断哪些图片有检测结果
-    summary_path = os.path.join(detect_output_dir, "summary.json")
-    if not os.path.exists(summary_path):
-        print("\n错误：未找到汇总文件")
-        return
-    
-    with open(summary_path, 'r', encoding='utf-8') as f:
-        summary = json.load(f)
-    
+    # 步骤2: 直接用 detect.py 返回值判断哪些图片有检测结果（不再重读 summary.json）
     images_with_detection = []
     images_without_detection = []
     
-    for result in summary["results"]:
+    for result in results:
         img_path = os.path.join(detect_output_dir, result["image_filename"])
         if result["detection_count"] > 0:
             images_with_detection.append(img_path)

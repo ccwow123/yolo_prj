@@ -3,6 +3,8 @@ import cv2
 import numpy as np
 import logging
 
+from .utils import imread_unicode
+
 # logger
 logger = logging.getLogger(__name__)
 
@@ -202,7 +204,7 @@ def convert_screenshots_to_jpg(screenshots_dir, filtered_frames, output_dir, qua
     for frame_num in filtered_frames:
         src_path = os.path.join(screenshots_dir, f'screenshot_{frame_num:06d}.png')
         if os.path.exists(src_path):
-            image = cv2.imread(src_path)
+            image = imread_unicode(src_path)
             dst_path = os.path.join(output_dir, f'screenshot_{frame_num:06d}.jpg')
             cv2.imwrite(dst_path, image, jpeg_params)
             count += 1

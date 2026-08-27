@@ -5,7 +5,7 @@ import json
 import logging
 from tqdm import tqdm
 
-from utils import get_next_exp_dir, is_video_file, is_image_file, save_detection_results, load_yolo_model
+from utils import get_next_exp_dir, collect_source_items, save_detection_results, load_yolo_model
 
 # logger
 logger = logging.getLogger(__name__)
@@ -137,53 +137,34 @@ def run_video_detection(model, source, conf, save_dir, save_json, save_annotated
     return video_results
 
 def run_detection(model, model_path, source, conf, save_dir, save_json, save_annotated=True):
-    """运行检测主函数（model 已加载）"""
-    if save_dir is None:
-        save_dir = get_next_exp_dir('runs/detect')
-    else:
-        save_dir = get_next_exp_dir(save_dir)
+    """运行检测主函数（model 已加载）
 
+    Returns:
+        (save_dir, all_results): 实际输出目录 与 逐图检测结果列表；失败返回 (None, None)
+    """
+    save_dir = get_next_exp_dir(save_dir or 'runs/detect')
     os.makedirs(save_dir, exist_ok=True)
     logger.info(f"结果将保存到: {save_dir}")
 
+    items, error = collect_source_items(source)
+    if error:
+        logger.error(f"错误：{error}")
+        return None, None
+
     all_results = []
-
-    if os.path.isfile(source):
-        if is_video_file(source):
-            video_results = run_video_detection(model, source, conf, save_dir, save_json, save_annotated)
-            if video_results:
-                all_results.extend(video_results)
-        else:
-            logger.info(f"处理单张图像: {os.path.basename(source)}")
-            results = model(source, conf=conf, save=False, verbose=False)
-            img_results = save_detection_results(results[0], save_dir, os.path.basename(source), save_json, save_annotated)
-            if img_results:
-                all_results.append(img_results)
-            logger.info(f"已保存 {os.path.basename(source)} 的结果")
-
-    elif os.path.isdir(source):
-        files = [f for f in os.listdir(source)
-                 if os.path.isfile(os.path.join(source, f))
-                 and (is_image_file(f) or is_video_file(f))]
-
-        with tqdm(total=len(files), desc="处理文件", unit="个") as pbar:
-            for filename in files:
-                filepath = os.path.join(source, filename)
-                if is_video_file(filepath):
-                    video_results = run_video_detection(model, filepath, conf, save_dir, save_json, save_annotated)
-                    if video_results:
-                        all_results.extend(video_results)
-                else:
-                    results = model(filepath, conf=conf, save=False, verbose=False)
-                    img_results = save_detection_results(results[0], save_dir, filename, save_json, save_annotated)
-                    if img_results:
-                        all_results.append(img_results)
-                pbar.update(1)
-        logger.info(f"\n所有文件处理完成。结果已保存到 {save_dir}")
-
-    else:
-        logger.error(f"错误：未找到源文件/目录 {source}")
-        return None
+    with tqdm(total=len(items), desc="处理文件", unit="个") as pbar:
+        for path, is_video in items:
+            if is_video:
+                video_results = run_video_detection(model, path, conf, save_dir, save_json, save_annotated)
+                if video_results:
+                    all_results.extend(video_results)
+            else:
+                results = model(path, conf=conf, save=False, verbose=False)
+                img_results = save_detection_results(results[0], save_dir, os.path.basename(path), save_json, save_annotated)
+                if img_results:
+                    all_results.append(img_results)
+            pbar.update(1)
+    logger.info(f"\n所有文件处理完成。结果已保存到 {save_dir}")
 
     # 生成汇总json文件（始终保存）
     if all_results:
@@ -201,7 +182,7 @@ def run_detection(model, model_path, source, conf, save_dir, save_json, save_ann
             json.dump(summary, f, indent=2, ensure_ascii=False)
         logger.info(f"\n汇总文件已保存: {summary_path}")
 
-    return save_dir
+    return save_dir, all_results
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部检测推理脚本')

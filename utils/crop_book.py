@@ -3,7 +3,7 @@ import os
 import cv2
 import numpy as np
 
-from utils import get_next_exp_dir, is_image_file
+from utils import get_next_exp_dir, collect_source_items, imread_unicode
 
 
 def detect_book_bbox(image_gray, min_ratio=0.15, blur_kernel=5,
@@ -127,7 +127,7 @@ def process_single(image_path, output_dir, margin=None, min_ratio=0.15, debug=Fa
     Returns:
         bool: True 表示成功
     """
-    image = cv2.imread(image_path)
+    image = imread_unicode(image_path)
     if image is None:
         print(f"  ✗ {os.path.basename(image_path)} - 无法读取图像")
         return False
@@ -179,16 +179,9 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     print(f"[INFO] 输出目录: {output_dir}")
 
-    sources = []
-    if os.path.isdir(args.input):
-        sources = [
-            os.path.join(args.input, f) for f in os.listdir(args.input)
-            if os.path.isfile(os.path.join(args.input, f)) and is_image_file(f)
-        ]
-    elif os.path.isfile(args.input):
-        sources = [args.input]
-    else:
-        print(f"[ERROR] 未找到输入路径: {args.input}")
+    sources, error = collect_source_items(args.input, image_only=True)
+    if error:
+        print(f"[ERROR] {error}")
         return
 
     if not sources:
@@ -196,7 +189,7 @@ def main():
         return
 
     print(f"[INFO] 待处理图片: {len(sources)} 张")
-    ok = sum(process_single(s, output_dir, args.margin, args.min_ratio, args.debug) for s in sources)
+    ok = sum(process_single(s, output_dir, args.margin, args.min_ratio, args.debug) for s, _ in sources)
     print(f"\n[DONE] 成功 {ok}/{len(sources)} 张，输出目录: {output_dir}")
 
 
