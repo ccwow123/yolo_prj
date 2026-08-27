@@ -10,7 +10,7 @@ from utils import get_next_exp_dir, is_video_file, is_image_file, save_detection
 # logger
 logger = logging.getLogger(__name__)
 
-def detect_single_frame(model, frame, conf, save_dir=None, filename=None, save_json=False, save_annotated=True):
+def detect_single_frame(model, frame, conf, save_dir=None, filename=None, save_json=False, save_annotated=True, annotate=True):
     """
     检测单帧图像（公共函数）
     
@@ -22,10 +22,11 @@ def detect_single_frame(model, frame, conf, save_dir=None, filename=None, save_j
         filename: 保存文件名（可选）
         save_json: 是否保存json
         save_annotated: 是否保存带检测框的图像
+        annotate: 是否计算标注图像（False时跳过耗时的 plot()，返回None）
     
     Returns:
         dict: 检测结果数据
-        numpy.ndarray: 标注后的图像（如果需要）
+        numpy.ndarray: 标注后的图像（annotate=False 或不需要时返回 None）
     """
     results = model(frame, conf=conf, save=False, verbose=False)
     result = results[0]
@@ -61,7 +62,7 @@ def detect_single_frame(model, frame, conf, save_dir=None, filename=None, save_j
     if save_dir and filename:
         save_detection_results(result, save_dir, filename, save_json, save_annotated)
     
-    return data, result.plot()
+    return data, result.plot() if annotate else None
 
 def run_image_detection(model, source, conf, save_dir, save_json, save_annotated=True):
     """运行图像检测（使用已加载的 model 对象）"""
@@ -81,9 +82,13 @@ def run_image_detection(model, source, conf, save_dir, save_json, save_annotated
 
     logger.info(f"\n所有结果已保存到 {save_dir}")
 
-def run_video_detection(model, source, conf, save_dir, save_json, save_annotated=True):
+def run_video_detection(model, source, conf, save_dir, save_json, save_annotated=True, annotate_video=None):
     """运行视频检测（使用已加载的 model 对象）"""
     model.eval()
+
+    # annotate_video 默认跟随 save_annotated：不保存标注时跳过逐帧 plot()，只输出原帧
+    if annotate_video is None:
+        annotate_video = save_annotated
 
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
@@ -116,11 +121,12 @@ def run_video_detection(model, source, conf, save_dir, save_json, save_annotated
                 model, frame, conf, 
                 save_dir=save_dir if save_json else None,
                 filename=f'frame_{frame_count:04d}.jpg' if save_json else None,
-                save_json=save_json
+                save_json=save_json,
+                annotate=annotate_video
             )
             
             video_results.append(frame_data)
-            out.write(annotated_frame)
+            out.write(annotated_frame if annotated_frame is not None else frame)
             frame_count += 1
             pbar.update(1)
     
