@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import logging
 import cv2
+import numpy as np
 import torch
 from ultralytics import YOLO
 
@@ -28,6 +29,15 @@ def get_next_exp_dir(base_dir='runs/exp'):
         if not os.path.exists(exp_dir):
             return exp_dir
         exp_num += 1
+
+
+def imread_unicode(path):
+    """兼容含非 ASCII 字符路径的读图 (cv2.imread 在 Windows 上对这类路径会静默返回 None)。
+    文件不存在/无法解码时返回 None。"""
+    if not os.path.exists(path):
+        return None
+    data = np.fromfile(path, dtype=np.uint8)
+    return cv2.imdecode(data, cv2.IMREAD_COLOR)
 
 
 def is_video_file(filepath):
