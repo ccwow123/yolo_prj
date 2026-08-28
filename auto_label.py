@@ -33,14 +33,14 @@ logger = logging.getLogger(__name__)
 
 def run_auto_label(model_path, source, classes_path, conf, save_dir,
                    device='cuda', fp16=True, copy_undetected=False,
-                   export_max_edge=None):
+                   export_max_edge=None, list_file=None):
     classes = parse_classes_yaml(classes_path)
     names = classes["names"]
     prompts = classes["prompts"]
 
     annotator = Florence2Annotator(model_path, device=device, fp16=fp16)
 
-    items, error = collect_source_items(source, image_only=True, recursive=True)
+    items, error = collect_source_items(source, list_file=list_file, image_only=True, recursive=True)
     if error:
         logger.error(f"错误：{error}")
         return None, None
@@ -135,6 +135,8 @@ if __name__ == '__main__':
                         help='Florence-2 模型本地目录（含 config.json + *.safetensors）')
     parser.add_argument('--source', type=str, default=DEFAULT_FLORENCE2_INPUT_DIR,
                         help='待标注图片目录/单图/txt 列表')
+    parser.add_argument('--list-file', type=str, default=None,
+                        help='待标注图片路径txt列表（每行一个，支持#注释），优先于--source')
     parser.add_argument('--classes', type=str, default=DEFAULT_FLORENCE2_CLASSES,
                         help='类别定义 yaml（顺序决定 class_id）')
     parser.add_argument('--conf', type=float, default=DEFAULT_FLORENCE2_CONF,
@@ -153,4 +155,4 @@ if __name__ == '__main__':
     configure_logging()
     run_auto_label(args.model, args.source, args.classes, args.conf,
                    args.save_dir, args.device, args.fp16, args.copy_undetected,
-                   args.export_max_edge)
+                   args.export_max_edge, list_file=args.list_file)

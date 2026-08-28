@@ -278,6 +278,7 @@ def process_video(model, video_path, save_dir, save_txt, distance_threshold=1400
         'filename': video_name,
         'output_video': output_video_path,
         'screenshots_dir': screenshots_dir,
+        'filtered_dir': filtered_dir,
         'total_frames': frame_count,
         'valid_distance_frames': len(distances),
         'avg_distance': avg_distance,
@@ -416,7 +417,7 @@ def print_summary(stats, save_dir):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部距离计算器（自动截图）')
-    parser.add_argument('--model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt', 
+    parser.add_argument('--model', type=str, default=r'./weights/cbook-hand.pt', 
                         help='手部检测模型权重路径')
     parser.add_argument('--source', type=str, default=DEFAULT_VIDEO_SOURCE, 
                         help='源目录、图片路径或视频文件路径')

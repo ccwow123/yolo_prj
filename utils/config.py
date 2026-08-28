@@ -8,7 +8,7 @@
 DEFAULT_ALBUM_SOURCE = r'E:\储藏室\画册\ss - 副本\[Cuvie] Bitter Addiction [DL版][机翻]'
 
 # hand_distance：示例视频
-DEFAULT_VIDEO_SOURCE = r'E:\Download\新建文件夹 (3)'
+DEFAULT_VIDEO_SOURCE = r'E:\Download\新建文件夹 (4)'
 
 # canny_cut：单图输入
 DEFAULT_CANNY_INPUT = r'C:\Users\Administrator\Desktop\1.png'
