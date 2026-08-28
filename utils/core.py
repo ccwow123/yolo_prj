@@ -698,7 +698,7 @@ def load_source_list(list_file):
     return paths
 
 
-def collect_source_items(source, list_file=None, image_only=False):
+def collect_source_items(source, list_file=None, image_only=False, recursive=False):
     """
     收集待处理的媒体文件列表，统一处理单文件/目录/txt列表三种来源。
 
@@ -706,6 +706,7 @@ def collect_source_items(source, list_file=None, image_only=False):
         source: 目录路径或媒体文件路径（list_file 为空时必填）
         list_file: 可选，txt文件路径（每行一个路径，优先生效）
         image_only: True 时仅收集图片文件
+        recursive: True 时递归遍历 source 目录下所有子文件夹
 
     Returns:
         items: [(path, is_video), ...] 列表
@@ -739,13 +740,21 @@ def collect_source_items(source, list_file=None, image_only=False):
     if os.path.isfile(source):
         return [to_item(source)], None
     if os.path.isdir(source):
-        files = sorted(
-            f for f in os.listdir(source)
-            if os.path.isfile(os.path.join(source, f)) and match(f)
-        )
+        if recursive:
+            files = sorted(
+                os.path.join(dp, f)
+                for dp, dn, fn in os.walk(source)
+                for f in fn
+                if match(f)
+            )
+        else:
+            files = sorted(
+                os.path.join(source, f) for f in os.listdir(source)
+                if os.path.isfile(os.path.join(source, f)) and match(f)
+            )
         if not files:
             return [], f"目录中没有找到媒体文件: {source}"
-        return [to_item(os.path.join(source, f)) for f in files], None
+        return [to_item(fp) for fp in files], None
     return [], f"源文件/目录不存在: {source}"
 
 

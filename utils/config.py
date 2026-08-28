@@ -8,7 +8,7 @@
 DEFAULT_ALBUM_SOURCE = r'E:\储藏室\画册\ss - 副本\[Cuvie] Bitter Addiction [DL版][机翻]'
 
 # hand_distance：示例视频
-DEFAULT_VIDEO_SOURCE = r'E:\Download'
+DEFAULT_VIDEO_SOURCE = r'E:\Download\新建文件夹 (3)'
 
 # canny_cut：单图输入
 DEFAULT_CANNY_INPUT = r'C:\Users\Administrator\Desktop\1.png'
@@ -51,7 +51,7 @@ DEFAULT_FLORENCE2_CLASSES = r'classes.yaml'
 DEFAULT_FLORENCE2_CONF = 0.35
 
 # auto_label：输入目录
-DEFAULT_FLORENCE2_INPUT_DIR = r"C:\Users\Administrator\Desktop\新建文件夹"
+DEFAULT_FLORENCE2_INPUT_DIR = r"E:\Files\yolo_prj\runs\hand_distance\新建文件夹 (3)"
 
 # auto_label：结果父目录，每个输入生成独立 expN 子目录
 DEFAULT_FLORENCE2_SAVE_DIR = r'runs\florence_labels'

@@ -2,6 +2,31 @@ import cv2
 import numpy as np
 
 
+def resize_max_edge(img, max_edge):
+    """
+    按最长边等比缩放图像，使最长边不超过 max_edge 像素。
+    保持长宽比；max_edge 为空或原图最长边已小于等于阈值时原样返回。
+
+    Args:
+        img: BGR 图像
+        max_edge: 最长边目标像素；None 表示不缩放
+
+    Returns:
+        缩放后的图像（可能为原图对象）
+    """
+    if img is None or not max_edge:
+        return img
+    h, w = img.shape[:2]
+    long_edge = max(h, w)
+    if long_edge <= max_edge:
+        return img
+    scale = max_edge / long_edge
+    return cv2.resize(
+        img, (max(1, round(w * scale)), max(1, round(h * scale))),
+        interpolation=cv2.INTER_AREA,
+    )
+
+
 def frame_mad(frame_a, frame_b, max_edge=96):
     """
     计算两帧的平均绝对差（0-255），用于画面运动量检测。

@@ -22,6 +22,7 @@ from utils.config import (
     DEFAULT_FLORENCE2_SAVE_DIR,
 )
 from utils.core import collect_source_items, configure_logging, get_next_exp_dir, imread_unicode
+from utils.cv import resize_max_edge
 from utils.florence2 import (
     Florence2Annotator, boxes_to_yolo, draw_detections, parse_classes_yaml,
     write_yolo_label,
@@ -31,14 +32,15 @@ logger = logging.getLogger(__name__)
 
 
 def run_auto_label(model_path, source, classes_path, conf, save_dir,
-                   device='cuda', fp16=True, copy_undetected=False):
+                   device='cuda', fp16=True, copy_undetected=False,
+                   export_max_edge=None):
     classes = parse_classes_yaml(classes_path)
     names = classes["names"]
     prompts = classes["prompts"]
 
     annotator = Florence2Annotator(model_path, device=device, fp16=fp16)
 
-    items, error = collect_source_items(source, image_only=True)
+    items, error = collect_source_items(source, image_only=True, recursive=True)
     if error:
         logger.error(f"错误：{error}")
         return None, None
@@ -62,6 +64,8 @@ def run_auto_label(model_path, source, classes_path, conf, save_dir,
                 continue
             rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
             dets = annotator.detect(rgb, prompts)
+            # 导出图可选降分辨率（标签为归一化坐标，缩放后仍有效）；None 时保持原图
+            export_bgr = resize_max_edge(bgr, export_max_edge) if export_max_edge else bgr
 
             fil = [d for d in dets if d["score"] >= conf]
             base = os.path.splitext(os.path.basename(path))[0]
@@ -74,7 +78,7 @@ def run_auto_label(model_path, source, classes_path, conf, save_dir,
             ]
 
             # 拷贝原图到 images（与 cbook 数据集结构对齐，供 train.py 引用）
-            cv2.imwrite(os.path.join(images_dir, os.path.basename(path)), bgr)
+            cv2.imwrite(os.path.join(images_dir, os.path.basename(path)), export_bgr)
             # YOLO 标签（归一化 cx,cy,w,h）
             write_yolo_label(
                 os.path.join(labels_dir, base + ".txt"),
@@ -82,7 +86,7 @@ def run_auto_label(model_path, source, classes_path, conf, save_dir,
             )
             # 带框预览图：draw_detections 期待归一化 xyxy 框；(x0,y0,x1,y1) 来自 detect
             preview = draw_detections(
-                bgr, [(d["class_id"], d["box_xyxy"], d["score"]) for d in fil], names
+                export_bgr, [(d["class_id"], d["box_xyxy"], d["score"]) for d in fil], names
             )
             cv2.imwrite(os.path.join(preview_dir, base + ".png"), preview)
 
@@ -142,8 +146,11 @@ if __name__ == '__main__':
                         help='禁用 FP16 推理（仅 GPU 生效）')
     parser.add_argument('--copy-undetected', dest='copy_undetected', action='store_true',
                         help='未检出目标的图片也复制原图到输出 images 目录（默认跳过不拷贝）')
+    parser.add_argument('--export-max-edge', type=int, default=None,
+                        help='导出图（images+previews）的最长边像素，按比例等比缩小；默认不缩放')
 
     args = parser.parse_args()
     configure_logging()
     run_auto_label(args.model, args.source, args.classes, args.conf,
-                   args.save_dir, args.device, args.fp16, args.copy_undetected)
+                   args.save_dir, args.device, args.fp16, args.copy_undetected,
+                   args.export_max_edge)
