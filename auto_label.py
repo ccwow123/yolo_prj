@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_auto_label(model_path, source, classes_path, conf, save_dir,
-                   device='cuda', fp16=True):
+                   device='cuda', fp16=True, copy_undetected=False):
     classes = parse_classes_yaml(classes_path)
     names = classes["names"]
     prompts = classes["prompts"]
@@ -64,12 +64,15 @@ def run_auto_label(model_path, source, classes_path, conf, save_dir,
             dets = annotator.detect(rgb, prompts)
 
             fil = [d for d in dets if d["score"] >= conf]
+            base = os.path.splitext(os.path.basename(path))[0]
+            if not fil and not copy_undetected:
+                logger.info(f"未检出目标，跳过（不拷贝原图）: {base}")
+                continue
             records = [
                 (d["class_id"], boxes_to_yolo([d["box_xyxy"]])[0], d["score"])
                 for d in fil
             ]
 
-            base = os.path.splitext(os.path.basename(path))[0]
             # 拷贝原图到 images（与 cbook 数据集结构对齐，供 train.py 引用）
             cv2.imwrite(os.path.join(images_dir, os.path.basename(path)), bgr)
             # YOLO 标签（归一化 cx,cy,w,h）
@@ -137,8 +140,10 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default='cuda', help='推理设备（cuda/cpu）')
     parser.add_argument('--no-fp16', dest='fp16', action='store_false',
                         help='禁用 FP16 推理（仅 GPU 生效）')
+    parser.add_argument('--copy-undetected', dest='copy_undetected', action='store_true',
+                        help='未检出目标的图片也复制原图到输出 images 目录（默认跳过不拷贝）')
 
     args = parser.parse_args()
     configure_logging()
     run_auto_label(args.model, args.source, args.classes, args.conf,
-                   args.save_dir, args.device, args.fp16)
+                   args.save_dir, args.device, args.fp16, args.copy_undetected)
