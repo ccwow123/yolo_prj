@@ -2,6 +2,9 @@ import argparse
 import os
 import cv2
 
+import sys, os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+
 from utils import get_next_exp_dir, collect_source_items, imread_unicode
 from utils.cv import book_contour_bbox
 from utils.config import DEFAULT_BOOK_INPUT

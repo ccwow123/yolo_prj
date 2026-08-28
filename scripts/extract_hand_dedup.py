@@ -18,6 +18,9 @@ import logging
 import os
 import shutil
 
+import sys, os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+
 from utils.core import configure_logging, get_files_by_extension
 
 logger = logging.getLogger(__name__)

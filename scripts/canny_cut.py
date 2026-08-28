@@ -3,6 +3,9 @@ import numpy as np
 import os
 import argparse
 
+import sys, os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+
 from utils import get_next_exp_dir, imread_unicode
 from utils.config import DEFAULT_CANNY_INPUT
 

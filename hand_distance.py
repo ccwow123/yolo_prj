@@ -12,10 +12,10 @@ from utils import (
     get_next_exp_dir, validate_parameters, collect_source_items, imread_unicode,
     detect_hands, detect_hands_scaled, calculate_hand_distance, crop_image, save_screenshot,
     deduplicate_screenshots, save_distance_summary, save_frame_distance_log,
-    load_yolo_model, convert_screenshots_to_jpg
+    load_yolo_model, convert_screenshots_to_jpg, configure_logging
 )
 from utils.cv import frame_mad
-from utils.config import DEFAULT_VIDEO_SOURCE, DEFAULT_INFER_MAX_EDGE, DEFAULT_INFER_IMGSZ, DEFAULT_MOTION_THRESHOLD
+from utils.config import DEFAULT_VIDEO_SOURCE, DEFAULT_INFER_MAX_EDGE, DEFAULT_INFER_IMGSZ, DEFAULT_MOTION_THRESHOLD, DEFAULT_HAND_MODEL
 
 # logger
 logger = logging.getLogger(__name__)
@@ -417,7 +417,7 @@ def print_summary(stats, save_dir):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部距离计算器（自动截图）')
-    parser.add_argument('--model', type=str, default=r'./weights/cbook-hand.pt', 
+    parser.add_argument('--model', type=str, default=DEFAULT_HAND_MODEL, 
                         help='手部检测模型权重路径')
     parser.add_argument('--source', type=str, default=DEFAULT_VIDEO_SOURCE, 
                         help='源目录、图片路径或视频文件路径')
@@ -450,7 +450,7 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
-    logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
+    configure_logging()
     
     logger.info("="*50)
     logger.info("YOLO手部距离计算器")

@@ -3,6 +3,9 @@ import csv
 import os
 from pathlib import Path
 
+import sys, os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+
 from utils import is_image_file, is_video_file
 
 

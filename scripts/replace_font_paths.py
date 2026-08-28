@@ -12,6 +12,9 @@ import re
 from pathlib import Path
 from typing import Any
 
+import sys, os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+
 from utils.config import DEFAULT_FONT_JSON_DIR
 
 

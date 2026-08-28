@@ -91,7 +91,7 @@ def is_grayscale_v2(image_path, saturation_threshold=10, variance_threshold=10, 
     import numpy as np
 
     try:
-        img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        img = imread_unicode(image_path)
         if img is None:
             return False
 

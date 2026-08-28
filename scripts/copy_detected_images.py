@@ -3,6 +3,9 @@ import os
 import json
 import shutil
 
+import sys, os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+
 from utils.config import DEFAULT_DETECT_SOURCE_DIR, DEFAULT_DETECT_TARGET_DIR
 
 def load_summary(summary_path):

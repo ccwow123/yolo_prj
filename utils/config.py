@@ -7,6 +7,9 @@
 # detect_comfyui / colorize 共用：画册输入目录
 DEFAULT_ALBUM_SOURCE = r'E:\储藏室\画册\ss - 副本\[Cuvie] Bitter Addiction [DL版][机翻]'
 
+# hand_distance：手部检测模型权重（默认）
+DEFAULT_HAND_MODEL = r'weights/cbook-hand.pt'
+
 # hand_distance：示例视频
 DEFAULT_VIDEO_SOURCE = r'E:\Download\新建文件夹 (4)'
 
@@ -31,9 +34,7 @@ DEFAULT_INFER_IMGSZ = None
 
 # hand_distance：静止判定阈值（0-255 帧间平均绝对差；帧间运动低于此值视为静止）。
 # >0 时：静止帧复用上次推理并才累计"稳定时长"，运动帧重置计数，保证截图帧清晰静止；0 关闭。
-# 目标机实测：m=20 时截图仍清晰、速度最快(约47帧/s，实时富余)。注意该值已高到几乎把所有帧
-# 判为静止（该片逐帧MAD p99≈24.6），静止门槛近乎失效、近似“只按距离累计+最大复用”，
-# 若今后遇到严格需“静止才截”的片子应下调(如4~6)。
+# 统一取 4：在"画面静止才截"与推理复用速度之间平衡；素材对静止门槛要求更高可下调(如2~3)。
 DEFAULT_MOTION_THRESHOLD = 4
 
 # auto_label：Florence-2 模型本地仓库目录（含 config.json + model.safetensors，

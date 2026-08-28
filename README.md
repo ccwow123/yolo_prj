@@ -78,7 +78,7 @@ python detect.py --source imgs/ --device cpu
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--model` | string | `./weights/ultralytics/hand_yolov8n.pt` | 手部检测模型权重路径 |
+| `--model` | string | `weights/cbook-hand.pt` | 手部检测模型权重路径 |
 | `--source` | string | - | 源目录、图片路径或视频文件路径 |
 | `--list-file` | string | None | 从txt批量导入源路径（每行一个，支持`#`注释和空行），优先于`--source` |
 | `--conf` | float | 0.6 | 置信度阈值 |
@@ -90,7 +90,7 @@ python detect.py --source imgs/ --device cpu
 | `--quality` | int | 100 | 图像压缩质量（1-100） |
 | `--max-edge` | int | 1280 | 视频输入帧最长边像素（0 表示不预缩放），坐标映射回原分辨率 |
 | `--imgsz` | int | 480 | 模型前向尺寸，直接决定网络FLOPs（0 用模型默认640） |
-| `--motion-threshold` | float | 6.0 | 静止判定阈值（0-255帧间MAD，0关闭）；仅静止帧累计稳定时长并触发截图 |
+| `--motion-threshold` | float | 4.0 | 静止判定阈值（0-255帧间MAD，0关闭）；仅静止帧累计稳定时长并触发截图 |
 | `--no-fp16` | flag | False | 禁用FP16混合精度推理（仅GPU生效） |
 | `--no-video` | flag | False | 不生成输出视频（纯截图，跳过逐帧写入，最快） |
 | `--no-annotate-video` | flag | False | 输出视频不叠加检测标注，写原帧（省每帧拷贝/绘制） |
@@ -272,7 +272,7 @@ runs/comfyui_output/            # ComfyUI处理结果目录
 
 | 模型名称 | 路径 | 用途 |
 |---------|------|------|
-| 手部检测模型 | `./weights/ultralytics/hand_yolov8n.pt` | 检测手部 |
+| 手部检测模型 | `./weights/cbook-hand.pt` | 检测手部（hand_distance 默认） |
 | 审查检测模型 | `./weights/censor_detect_v1.0_s_0725.pt` | 检测审查目标 |
 | YOLO26n | `./weights/ultralytics/yolo26/yolo26n/yolo26n.pt` | 通用检测 |
 | SAM模型 | `./weights/ultralytics/sam_b.pt` | 分割模型 |
@@ -295,7 +295,7 @@ runs/comfyui_output/            # ComfyUI处理结果目录
 | 异步读帧 | 后台线程预取解码帧，把I/O从推理主线程解耦 |
 | 关视频输出（`--no-video`） | 跳过逐帧写入，纯截图最快路径 |
 
-> **调参建议**：`motion_threshold` 越大判定越宽松（速度越快），但为保证"画面静止才截图"应配合实际素材微调；实测 `motion_threshold=20` 比 `6` 快约15%，若素材对静止门槛要求不高可适当上调。
+> **调参建议**：`motion_threshold` 越大判定越宽松（速度越快），但为保证"画面静止才截图"应配合实际素材微调；默认取 `4`，若素材对静止门槛要求不高可适当上调（如 8~20），追求更严静止则下调（如 2~3）。
 
 ## 许可证
 
