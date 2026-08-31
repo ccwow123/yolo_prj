@@ -6,6 +6,7 @@ import logging
 from tqdm import tqdm
 
 from utils import get_next_exp_dir, collect_source_items, save_detection_results, load_yolo_model, configure_logging
+from utils.config import DEFAULT_CENSOR_MODEL
 
 # logger
 logger = logging.getLogger(__name__)
@@ -153,20 +154,30 @@ def run_video_detection(model, source, conf, save_dir, save_json, save_annotated
     
     return video_results
 
-def run_detection(model, model_path, source, conf, save_dir, save_json, save_annotated=True, sample_interval=1):
+def run_detection(model, model_path, source, conf, save_dir, save_json, save_annotated=True, sample_interval=1, image_only=False, annotated_dir=None):
     """运行检测主函数（model 已加载）
 
+    image_only=True 时仅处理图片，跳过视频文件（供 detect_comfyui 等仅图片流程复用）。
+    annotated_dir=True 时，图片分支额外保存一份带检测框的预览图到 <save_dir>/annotated，
+    不影响 save_dir（folder2/源图）的正常保存，用于人工核对检测结果。
+    返回的第三项为实际带框预览目录（未启用时为 None）。
+
     Returns:
-        (save_dir, all_results): 实际输出目录 与 逐图检测结果列表；失败返回 (None, None)
+        (save_dir, all_results, annotated_dir): 实际输出目录、逐图检测结果、带框预览目录；失败返回 (None, None, None)
     """
     save_dir = get_next_exp_dir(save_dir or 'runs/detect')
     os.makedirs(save_dir, exist_ok=True)
     logger.info(f"结果将保存到: {save_dir}")
 
-    items, error = collect_source_items(source)
+    if annotated_dir:
+        annotated_dir = os.path.join(save_dir, 'annotated')
+        os.makedirs(annotated_dir, exist_ok=True)
+        logger.info(f"带检测框预览将保存到: {annotated_dir}")
+
+    items, error = collect_source_items(source, image_only=image_only)
     if error:
         logger.error(f"错误：{error}")
-        return None, None
+        return None, None, None
 
     all_results = []
     with tqdm(total=len(items), desc="处理文件", unit="个") as pbar:
@@ -177,7 +188,11 @@ def run_detection(model, model_path, source, conf, save_dir, save_json, save_ann
                     all_results.extend(video_results)
             else:
                 results = model(path, conf=conf, save=False, verbose=False)
-                img_results = save_detection_results(results[0], save_dir, os.path.basename(path), save_json, save_annotated)
+                base_name = os.path.basename(path)
+                img_results = save_detection_results(results[0], save_dir, base_name, save_json, save_annotated)
+                if annotated_dir:
+                    # 独立目录再存一份带框预览，供人工检查，不影响源图
+                    save_detection_results(results[0], annotated_dir, base_name, save_json=False, save_annotated=True)
                 if img_results:
                     all_results.append(img_results)
             pbar.update(1)
@@ -199,11 +214,11 @@ def run_detection(model, model_path, source, conf, save_dir, save_json, save_ann
             json.dump(summary, f, indent=2, ensure_ascii=False)
         logger.info(f"\n汇总文件已保存: {summary_path}")
 
-    return save_dir, all_results
+    return save_dir, all_results, annotated_dir
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLO手部检测推理脚本')
-    parser.add_argument('--model', type=str, default=r'weights\censor_detect_v1.0_s_0725.pt', help='模型权重文件路径（手部跟踪使用手部检测权重）')
+    parser.add_argument('--model', type=str, default=DEFAULT_CENSOR_MODEL, help='模型权重文件路径（手部跟踪使用手部检测权重）')
     parser.add_argument('--source', type=str, default=r'imgs', help='源目录、图像路径或视频文件路径')
     parser.add_argument('--conf', type=float, default=0.6, help='置信度阈值')
     parser.add_argument('--save-dir', type=str, default='runs\detections', help='结果保存目录')

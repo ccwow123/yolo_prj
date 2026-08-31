@@ -35,8 +35,12 @@ def main():
                         help='检测结果保存目录（自动生成 expN）')
     parser.add_argument('--save-json', action='store_true', default=False,
                         help='保存单个检测json文件（汇总json始终保存）')
+    parser.add_argument('--annotated-dir', default=True,
+                        help='启用后把带检测框预览保存到 expN\\annotated 目录（不影响源图）')
 
     # ComfyUI 参数
+    parser.add_argument('--run-comfyui',  default=True,
+                        help='运行 ComfyUI 去码（默认不运行，有检测目标的图片仅复制原图）')
     parser.add_argument('--workflow', type=str, default=r'workflows\f2k-漫画去码-py.json',
                         help='ComfyUI工作流JSON路径')
     parser.add_argument('--comfyui-save-dir', type=str, default=DEFAULT_ALBUM_SOURCE + '[去码]',
@@ -45,6 +49,7 @@ def main():
                         help='ComfyUI服务器地址')
     parser.add_argument('--poll-timeout', type=int, default=300,
                         help='ComfyUI 轮询等待超时（秒），0 不限制')
+
 
     args = parser.parse_args()
 
@@ -65,15 +70,18 @@ def main():
         exit(1)
 
     # image_only=True 只收集图片，跳过视频，避免 None 崩溃
-    detect_output_dir, results = run_detection(
+    detect_output_dir, results, annotated_dir = run_detection(
         model, args.model, args.source, args.conf,
         args.detect_save_dir, args.save_json,
-        save_annotated=False, image_only=True
+        save_annotated=False, image_only=True,
+        annotated_dir=args.annotated_dir
     )
     if detect_output_dir is None:
         logger.error("检测未完成，未生成输出目录")
         exit(1)
     logger.info(f"  输出目录: {detect_output_dir}")
+    if annotated_dir:
+        logger.info(f"  带框预览目录: {annotated_dir}")
 
     # 步骤2: 直接用 detect.py 返回值分类有/无检测目标
     images_with_detection = []
@@ -104,35 +112,43 @@ def main():
             shutil.copy2(img_path, dest_path)
             logger.debug(f"  复制: {filename}")
 
-    # 步骤5: 有检测目标走 ComfyUI 处理
+    # 步骤5: 有检测目标处理（ComfyUI 或直接复制）
     if images_with_detection:
-        logger.info(f"\n[步骤3] 运行 ComfyUI 处理...")
-        logger.info(f"  工作流: {args.workflow}")
-        logger.info(f"  服务器: {args.comfyui_server}")
-        logger.info(f"  输出目录: {args.comfyui_save_dir}")
-
-        if not os.path.exists(args.workflow):
-            logger.error(f"工作流文件不存在: {args.workflow}")
-            exit(1)
-
-        comfy_client = ComfyUIClient(args.comfyui_server, poll_timeout=args.poll_timeout)
-        saved_paths = comfy_client.process_batch_images(
-            images_with_detection, args.workflow, args.comfyui_save_dir
-        )
-        logger.info(f"  ComfyUI 处理完成，成功保存 {len(saved_paths)} / {len(images_with_detection)} 张")
-
-        # 回退：ComfyUI 失败的图片复制原检测图
-        processed_filenames = set(os.path.basename(p) for p in saved_paths)
-        fallback_count = 0
-        for img_path in images_with_detection:
-            filename = os.path.basename(img_path)
-            if filename not in processed_filenames:
-                dest_path = os.path.join(args.comfyui_save_dir, filename)
+        if not args.run_comfyui:
+            # 未加 --run-comfyui：跳过 ComfyUI，直接复制原图
+            logger.info(f"\n[步骤3] 未启用 ComfyUI（未加 --run-comfyui），直接复制 {len(images_with_detection)} 张原图...")
+            for img_path in images_with_detection:
+                dest_path = os.path.join(args.comfyui_save_dir, os.path.basename(img_path))
                 shutil.copy2(img_path, dest_path)
-                logger.warning(f"  ComfyUI 处理失败，回退复制原图: {filename}")
-                fallback_count += 1
-        if fallback_count > 0:
-            logger.warning(f"  共回退 {fallback_count} 张图片（保留原图保证输出完整性）")
+                logger.debug(f"  复制: {os.path.basename(img_path)}")
+        else:
+            logger.info(f"\n[步骤3] 运行 ComfyUI 处理...")
+            logger.info(f"  工作流: {args.workflow}")
+            logger.info(f"  服务器: {args.comfyui_server}")
+            logger.info(f"  输出目录: {args.comfyui_save_dir}")
+
+            if not os.path.exists(args.workflow):
+                logger.error(f"工作流文件不存在: {args.workflow}")
+                exit(1)
+
+            comfy_client = ComfyUIClient(args.comfyui_server, poll_timeout=args.poll_timeout)
+            saved_paths = comfy_client.process_batch_images(
+                images_with_detection, args.workflow, args.comfyui_save_dir
+            )
+            logger.info(f"  ComfyUI 处理完成，成功保存 {len(saved_paths)} / {len(images_with_detection)} 张")
+
+            # 回退：ComfyUI 失败的图片复制原检测图
+            processed_filenames = set(os.path.basename(p) for p in saved_paths)
+            fallback_count = 0
+            for img_path in images_with_detection:
+                filename = os.path.basename(img_path)
+                if filename not in processed_filenames:
+                    dest_path = os.path.join(args.comfyui_save_dir, filename)
+                    shutil.copy2(img_path, dest_path)
+                    logger.warning(f"  ComfyUI 处理失败，回退复制原图: {filename}")
+                    fallback_count += 1
+            if fallback_count > 0:
+                logger.warning(f"  共回退 {fallback_count} 张图片（保留原图保证输出完整性）")
 
     print("\n" + "=" * 60)
     print("处理完成！")
