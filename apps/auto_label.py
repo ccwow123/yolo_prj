@@ -19,6 +19,7 @@ import sys, os as _os
 sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 
 import cv2
+from tqdm import tqdm
 
 from utils.config import (
     DEFAULT_FLORENCE2_CLASSES, DEFAULT_FLORENCE2_CONF, DEFAULT_FLORENCE2_INPUT_DIR, DEFAULT_FLORENCE2_MODEL,
@@ -59,7 +60,7 @@ def run_auto_label(model_path, source, classes_path, conf, save_dir,
     all_results = []
     total_dets = 0
 
-    for path, _ in items:
+    for path, _ in tqdm(items, desc="自动标注", unit="张"):
         try:
             bgr = imread_unicode(path)
             if bgr is None:
