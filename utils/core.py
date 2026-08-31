@@ -12,9 +12,34 @@ from ultralytics import YOLO
 logger = logging.getLogger(__name__)
 
 
+class _TqdmLogHandler(logging.StreamHandler):
+    """把日志经 tqdm.write 输出，避免刷新进度条时被日志行"顶开"。
+
+    tqdm 进度条与控制台日志都占用 stderr，直接用 StreamHandler 打印会在
+    每次回合把进度条挤换行。tqdm.write 打印前会临时收起进度条、写完再重绘，
+    因此日志与进度条能和谐共存；无进度条时退化为普通单行打印，行为不变。
+    """
+
+    def emit(self, record):
+        try:
+            from tqdm import tqdm
+            tqdm.write(self.format(record), file=self.stream)
+        except Exception:
+            self.handleError(record)
+
+
 def configure_logging(level=logging.INFO, fmt='[%(asctime)s] %(levelname)s: %(message)s'):
-    """统一日志初始化，各 CLI 入口调用以复用相同格式/级别。"""
-    logging.basicConfig(level=level, format=fmt, force=True)
+    """统一日志初始化，各 CLI 入口调用以复用相同格式/级别。
+
+    日志经 _TqdmLogHandler 输出：与 tqdm 进度条共存，不被顶开。
+    """
+    root = logging.getLogger()
+    root.setLevel(level)
+    for h in list(root.handlers):
+        root.removeHandler(h)
+    handler = _TqdmLogHandler()
+    handler.setFormatter(logging.Formatter(fmt=fmt))
+    root.addHandler(handler)
 
 
 def get_next_exp_dir(base_dir='runs/exp'):
