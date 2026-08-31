@@ -2,6 +2,10 @@ import argparse
 import os
 import shutil
 import logging
+
+import sys, os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+
 from tqdm import tqdm
 from utils import ComfyUIClient, is_grayscale, collect_source_items
 from utils.config import DEFAULT_ALBUM_SOURCE

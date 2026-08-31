@@ -22,11 +22,9 @@ import sys, os as _os
 sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 
 from utils.core import configure_logging, get_files_by_extension
+from utils.config import DEFAULT_HAND_SAVE_DIR, DEFAULT_TARGET_ROOT
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_HAND_SAVE_DIR = r'runs\hand_distance'
-DEFAULT_TARGET_ROOT = r'runs'
 
 
 def find_latest_exp(hand_save_dir):

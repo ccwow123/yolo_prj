@@ -1,21 +1,72 @@
-"""集中管理各 CLI 脚本的本机路径默认值。
+"""集中管理各 CLI 脚本的本机路径默认值与通用调参。
 
-这些值原本散落在各 argparse 的 default 里，导致本机路径泄露且难以统一调整。
-现统一收口到本文件：需改动路径时只改这里，脚本通过 utils 导入使用。
+这些值原本散落在各 argparse 的 default 或各脚本内，导致本机路径泄露、重复定义且难以统一调整。
+现统一收口到本文件：需改动时只改这里，脚本通过 utils 导入使用。
+
+分组约定：路径类常量与调参类常量分开，按所属模块聚合。
 """
 
-# detect / detect_comfyui 共用：审查检测模型权重（默认）
+# ============================================================
+# 一、审查检测 detect / detect_comfyui 共用
+# ============================================================
+# 审查检测模型权重（默认）
 DEFAULT_CENSOR_MODEL = r'weights\censor_detect_v1.0_s_0725.pt'
 
-# detect_comfyui / colorize 共用：画册输入目录
+# 画册输入目录（detect_comfyui / colorize）
 DEFAULT_ALBUM_SOURCE = r"E:\Share\[Horizontal World (またのんき▼)] キサ危機 (ブルーアーカイブ) [中国翻訳] [DL版]"
 
-# hand_distance：手部检测模型权重（默认）
+# ============================================================
+# 二、hand_distance：手部距离 → 截屏
+# ============================================================
+# 手部检测模型权重（默认）
 DEFAULT_HAND_MODEL = r'weights/cbook-hand.pt'
 
-# hand_distance：示例视频
-DEFAULT_VIDEO_SOURCE = r"E:\Share\[Horizontal World (またのんき▼)] キサ危機 (ブルーアーカイブ) [中国翻訳] [DL版]"
+# 手部距离结果父目录（每段视频一个 expN，expN 内 <视频名>/ 为去重 jpg）
+DEFAULT_HAND_SAVE_DIR = r'runs\hand_distance'
 
+# 去重截图的通用命中根目录（extract_hand_dedup 手动筛选用）
+DEFAULT_TARGET_ROOT = r'runs'
+
+# 示例视频（与画册目录同一来源，保留语义别名便于后续独立调整）
+DEFAULT_VIDEO_SOURCE = DEFAULT_ALBUM_SOURCE
+
+# --- 推理性能调参 ---
+# 视频推理输入的最长边像素（预缩放，0/None 表示不缩放）
+DEFAULT_INFER_MAX_EDGE = None
+# 模型前向尺寸（imgsz，直接决定网络 FLOPs；None 用模型默认 640）
+DEFAULT_INFER_IMGSZ = None
+# 静止判定阈值（0-255 帧间平均绝对差；帧间运动低于此值视为静止）。
+# >0 时：静止帧复用上次推理并才累计"稳定时长"，运动帧重置计数，保证截图帧清晰静止；0 关闭。
+# 统一取 4：在"画面静止才截"与推理复用速度之间平衡；素材对静止门槛要求更高可下调(如2~3)。
+DEFAULT_MOTION_THRESHOLD = 4
+
+# ============================================================
+# 三、auto_label / Florence-2
+# ============================================================
+# Florence-2 模型本地仓库目录（含 config.json + model.safetensors，
+# 从 HuggingFace 下载 microsoft/Florence-2-base 或 Florence-2-large 后放到这里）
+DEFAULT_FLORENCE2_MODEL = r'weights\Florence-2-base'
+
+# OVD 输出中过滤"退化点框"的最小归一化边长。
+# 模型对无目标背景偶尔吐出接近图像原点(0,0)、边长<0.1% 的无效小框，score 恒为 1
+# 无法用置信度过滤，须按尺寸剔除；0.005 = 图像边长 0.5%，真实目标远大于此。
+DEFAULT_MIN_BOX_SIZE = 0.005
+
+# 类别定义 yaml（顺序决定 class_id，从 0 开始）
+DEFAULT_FLORENCE2_CLASSES = 'classes.yaml'
+
+# 默认置信度阈值（Florence-2 开放词汇检测分数通常偏低，0.35 较合理）
+DEFAULT_FLORENCE2_CONF = 0.35
+
+# 输入目录
+DEFAULT_FLORENCE2_INPUT_DIR = r"E:\Files\yolo_prj\runs\hand_distance\新建文件夹 (3)"
+
+# 结果父目录，每个输入生成独立 expN 子目录
+DEFAULT_FLORENCE2_SAVE_DIR = r'runs\florence_labels'
+
+# ============================================================
+# 四、scripts 一次性脚本默认路径
+# ============================================================
 # canny_cut：单图输入
 DEFAULT_CANNY_INPUT = r'C:\Users\Administrator\Desktop\1.png'
 
@@ -29,33 +80,8 @@ DEFAULT_BOOK_INPUT = r'E:\储藏室\画册\扫描\testbook'
 # replace_font_paths：待处理 json 目录
 DEFAULT_FONT_JSON_DIR = r"E:\Share\1\original_images\manga_translator_work\json"
 
-# hand_distance：视频推理输入的最长边像素（预缩放，0/None 表示不缩放）
-DEFAULT_INFER_MAX_EDGE = None
-
-# hand_distance：模型前向尺寸（imgsz，直接决定网络 FLOPs；None 用模型默认 640）
-DEFAULT_INFER_IMGSZ = None
-
-# hand_distance：静止判定阈值（0-255 帧间平均绝对差；帧间运动低于此值视为静止）。
-# >0 时：静止帧复用上次推理并才累计"稳定时长"，运动帧重置计数，保证截图帧清晰静止；0 关闭。
-# 统一取 4：在"画面静止才截"与推理复用速度之间平衡；素材对静止门槛要求更高可下调(如2~3)。
-DEFAULT_MOTION_THRESHOLD = 4
-
-# auto_label：Florence-2 模型本地仓库目录（含 config.json + model.safetensors，
-# 从 HuggingFace 下载 microsoft/Florence-2-base 或 Florence-2-large 后放到这里）
-DEFAULT_FLORENCE2_MODEL = r'weights\Florence-2-base'
-# auto_label：Florence-2 OVD 输出中过滤"退化点框"的最小归一化边长。
-# 模型对无目标背景偶尔吐出接近图像原点(0,0)、边长<0.1% 的无效小框，score 恒为 1
-# 无法用置信度过滤，须按尺寸剔除；0.005 = 图像边长 0.5%，真实目标远大于此。
-DEFAULT_MIN_BOX_SIZE = 0.005
-
-# auto_label：类别定义 yaml（顺序决定 class_id，从 0 开始）
-DEFAULT_FLORENCE2_CLASSES = r'classes.yaml'
-
-# auto_label：默认置信度阈值（Florence-2 开放词汇检测分数通常偏低，0.35 较合理）
-DEFAULT_FLORENCE2_CONF = 0.35
-
-# auto_label：输入目录
-DEFAULT_FLORENCE2_INPUT_DIR = r"E:\Files\yolo_prj\runs\hand_distance\新建文件夹 (3)"
-
-# auto_label：结果父目录，每个输入生成独立 expN 子目录
-DEFAULT_FLORENCE2_SAVE_DIR = r'runs\florence_labels'
+# ============================================================
+# 五、公共文件系统常量
+# ============================================================
+# 帧去重图片输出的统一扩展名（相似度 / 去重逻辑通用）
+DEFAULT_EXT = '.jpg'

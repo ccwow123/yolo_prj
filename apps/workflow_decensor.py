@@ -2,6 +2,10 @@ import argparse
 import os
 import shutil
 import logging
+
+import sys, os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+
 from detect import run_detection
 from utils import ComfyUIClient, load_yolo_model, configure_logging
 from utils.config import DEFAULT_ALBUM_SOURCE, DEFAULT_CENSOR_MODEL
@@ -29,7 +33,7 @@ def main():
                         help='模型权重文件路径（默认从 config 读取）')
     parser.add_argument('--source', type=str, default=DEFAULT_ALBUM_SOURCE,
                         help='检测输入目录（仅图片）')
-    parser.add_argument('--conf', type=float, default=0.6,
+    parser.add_argument('--conf', type=float, default=0.3,
                         help='检测置信度阈值')
     parser.add_argument('--detect-save-dir', type=str, default=r'runs\detections',
                         help='检测结果保存目录（自动生成 expN）')

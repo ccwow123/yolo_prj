@@ -6,8 +6,8 @@
   3. run_auto_label(list_file=...) → 生成 YOLO 标签 + 预览图 + summary.json
 
 用法示例:
-    python workflow_hand2label.py --source ./videos
-    python workflow_hand2label.py --source ./videos --distance-threshold 1200 --stable-duration 2
+    python hand2label.py --source ./videos
+    python hand2label.py --source ./videos --distance-threshold 1200 --stable-duration 2
 """
 
 import argparse
@@ -15,19 +15,19 @@ import logging
 import os
 import tempfile
 
+import sys, os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+
 from auto_label import run_auto_label
 from hand_distance import run_hand_distance
 from utils.config import (
     DEFAULT_CENSOR_MODEL, DEFAULT_FLORENCE2_CLASSES, DEFAULT_FLORENCE2_CONF, DEFAULT_FLORENCE2_MODEL,
-    DEFAULT_FLORENCE2_SAVE_DIR, DEFAULT_INFER_IMGSZ, DEFAULT_INFER_MAX_EDGE,
+    DEFAULT_FLORENCE2_SAVE_DIR, DEFAULT_HAND_SAVE_DIR, DEFAULT_INFER_IMGSZ, DEFAULT_INFER_MAX_EDGE,
     DEFAULT_MOTION_THRESHOLD, DEFAULT_VIDEO_SOURCE,
 )
 from utils.core import collect_source_items, configure_logging
 
 logger = logging.getLogger(__name__)
-
-# 手部距离结果父目录（每段视频一个 expN，expN 内 <视频名>/ 为去重 jpg）
-DEFAULT_HAND_SAVE_DIR = r'runs\hand_distance'
 
 
 def collect_dedup_images(hand_stats):
