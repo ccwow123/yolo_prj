@@ -18,7 +18,7 @@ import tempfile
 from auto_label import run_auto_label
 from hand_distance import run_hand_distance
 from utils.config import (
-    DEFAULT_FLORENCE2_CLASSES, DEFAULT_FLORENCE2_CONF, DEFAULT_FLORENCE2_MODEL,
+    DEFAULT_CENSOR_MODEL, DEFAULT_FLORENCE2_CLASSES, DEFAULT_FLORENCE2_CONF, DEFAULT_FLORENCE2_MODEL,
     DEFAULT_FLORENCE2_SAVE_DIR, DEFAULT_INFER_IMGSZ, DEFAULT_INFER_MAX_EDGE,
     DEFAULT_MOTION_THRESHOLD, DEFAULT_VIDEO_SOURCE,
 )
@@ -52,7 +52,7 @@ def main():
     # hand_distance 阶段
     parser.add_argument('--source', type=str, default=DEFAULT_VIDEO_SOURCE,
                         help='视频/图片源路径或目录')
-    parser.add_argument('--hand-model', type=str, default=r'./weights/ultralytics/hand_yolov8n.pt',
+    parser.add_argument('--hand-model', type=str, default= DEFAULT_CENSOR_MODEL,
                         help='手部检测模型权重路径')
     parser.add_argument('--hand-save-dir', type=str, default=DEFAULT_HAND_SAVE_DIR,
                         help='hand_distance 输出父目录（每段视频一个 expN）')
