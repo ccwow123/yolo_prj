@@ -16,9 +16,10 @@ if current_dir not in sys.path:
 from .core import is_image_file
 
 class ComfyUIClient:
-    def __init__(self, server_address="http://127.0.0.1:8188"):
+    def __init__(self, server_address="http://127.0.0.1:8188", poll_timeout=300):
         self.server_address = server_address
         self.client_id = "python_comfyui_client"
+        self.poll_timeout = poll_timeout
     
     def _print(self, msg, progress_bar=None):
         if progress_bar:
@@ -98,10 +99,17 @@ class ComfyUIClient:
             self._print(f"执行工作流失败: {e}", progress_bar)
             return []
     
-    def get_output_images(self, prompt_id, progress_bar=None):
+    def get_output_images(self, prompt_id, progress_bar=None, poll_timeout=None):
+        poll_timeout = self.poll_timeout if poll_timeout is None else poll_timeout
         url = f"{self.server_address}/history/{prompt_id}"
-        
+        start_time = time.time()
+        await_str = f"等待 ComfyUI 输出 (prompt: {prompt_id}) ..."
+
+        # poll_timeout<=0 表示不限制，等价于无限等待（仍保留异常重试）
         while True:
+            if poll_timeout > 0 and time.time() - start_time > poll_timeout:
+                self._print(f"等待 ComfyUI 结果超时（{int(poll_timeout)}s）：{prompt_id} | {await_str}", progress_bar)
+                return []
             try:
                 response = urllib.request.urlopen(url)
                 history = json.loads(response.read().decode("utf-8"))
@@ -119,8 +127,8 @@ class ComfyUIClient:
                                 images.append((img, img_data))
                     
                     return images
-            except Exception as e:
-                self._print(f"等待结果中...", progress_bar)
+            except Exception:
+                pass
             
             time.sleep(1)
     

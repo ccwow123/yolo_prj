@@ -4,14 +4,17 @@
 现统一收口到本文件：需改动路径时只改这里，脚本通过 utils 导入使用。
 """
 
+# detect / detect_comfyui 共用：审查检测模型权重（默认）
+DEFAULT_CENSOR_MODEL = r'weights\censor_detect_v1.0_s_0725.pt'
+
 # detect_comfyui / colorize 共用：画册输入目录
-DEFAULT_ALBUM_SOURCE = r'E:\储藏室\画册\ss - 副本\[Cuvie] Bitter Addiction [DL版][机翻]'
+DEFAULT_ALBUM_SOURCE = r"E:\Share\[Horizontal World (またのんき▼)] キサ危機 (ブルーアーカイブ) [中国翻訳] [DL版]"
 
 # hand_distance：手部检测模型权重（默认）
 DEFAULT_HAND_MODEL = r'weights/cbook-hand.pt'
 
 # hand_distance：示例视频
-DEFAULT_VIDEO_SOURCE = r'E:\Download\新建文件夹 (4)'
+DEFAULT_VIDEO_SOURCE = r"E:\Share\[Horizontal World (またのんき▼)] キサ危機 (ブルーアーカイブ) [中国翻訳] [DL版]"
 
 # canny_cut：单图输入
 DEFAULT_CANNY_INPUT = r'C:\Users\Administrator\Desktop\1.png'

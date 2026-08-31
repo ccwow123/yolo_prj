@@ -198,13 +198,13 @@ def save_detection_results(result, save_dir, filename, save_json=False, save_ann
     
     # 保存图片结果
     if save_annotated:
-        # 使用YOLO自带的保存方法，保持颜色正确
+        # YOLO自带的保存方法，内部按 BGR 语义处理，颜色正确
         result.save(os.path.join(save_dir, filename))
     else:
-        # 直接保存原始图像，避免颜色空间转换问题
-        # YOLO的orig_img是RGB格式，使用PIL保存更可靠
+        # 保存原始图像：result.orig_img 实际为 BGR（由 cv2 读入），
+        # 需先转 RGB 再交给 PIL，否则会 B/R 通道交换导致变色
         from PIL import Image
-        img = Image.fromarray(result.orig_img)
+        img = Image.fromarray(result.orig_img[:, :, ::-1])
         img.save(os.path.join(save_dir, filename))
     
     # 准备检测结果数据
