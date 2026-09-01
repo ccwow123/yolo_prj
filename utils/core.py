@@ -1,5 +1,7 @@
 import os
 import json
+import shutil
+import zipfile
 import subprocess
 import tempfile
 import logging
@@ -821,3 +823,50 @@ def load_yolo_model(model_path):
     except Exception as e:
         logger.error(f"模型加载失败: {e}")
         return None, None
+
+
+def is_zip_file(path):
+    """判断路径是否为 zip 文件（扩展名 .zip 且文件存在）。"""
+    return os.path.isfile(path) and str(path).lower().endswith('.zip')
+
+
+def unzip_to_temp(zip_path, suffix=''):
+    """把 zip 解压到临时目录，返回临时目录绝对路径（调用方负责清理）。
+
+    逐个条目解压并做路径穿越防护：条目目标不在临时目录内则跳过。
+    """
+    tmp_dir = tempfile.mkdtemp(prefix='zipsrc_', suffix=suffix)
+    base = os.path.realpath(tmp_dir) + os.sep
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        entry_count = len(zf.namelist())
+        for member in zf.infolist():
+            target = os.path.realpath(os.path.join(tmp_dir, member.filename))
+            if not target.startswith(base):
+                logger.warning(f"跳过不安全的 zip 条目: {member.filename}")
+                continue
+            if member.is_dir():
+                os.makedirs(target, exist_ok=True)
+                continue
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with zf.open(member) as src, open(target, 'wb') as dst:
+                shutil.copyfileobj(src, dst)
+    logger.info(f"已解压 zip -> {tmp_dir} ({entry_count} 个条目)")
+    return tmp_dir
+
+
+def zip_directory(src_dir, dest_zip_path):
+    """把 src_dir 下所有文件打包成 zip（顶层直接是目录内容，不额外嵌套一层）。
+
+    dest_zip_path 若无 .zip 结尾自动补齐；返回实际 zip 路径。
+    """
+    if not str(dest_zip_path).lower().endswith('.zip'):
+        dest_zip_path += '.zip'
+    parent = os.path.dirname(os.path.abspath(dest_zip_path))
+    os.makedirs(parent, exist_ok=True)
+    with zipfile.ZipFile(dest_zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(src_dir):
+            for fname in files:
+                full = os.path.join(root, fname)
+                zf.write(full, os.path.relpath(full, src_dir))
+    logger.info(f"已打包 {src_dir} -> {dest_zip_path}")
+    return dest_zip_path

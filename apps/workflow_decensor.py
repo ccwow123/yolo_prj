@@ -8,6 +8,7 @@ sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))
 
 from detect import run_detection
 from utils import ComfyUIClient, load_yolo_model, configure_logging
+from utils import is_zip_file, unzip_to_temp, zip_directory
 from utils.config import DEFAULT_ALBUM_SOURCE, DEFAULT_CENSOR_MODEL
 
 '''
@@ -43,7 +44,7 @@ def main():
                         help='启用后把带检测框预览保存到 expN\\annotated 目录（不影响源图）')
 
     # ComfyUI 参数
-    parser.add_argument('--run-comfyui',  default=True,
+    parser.add_argument('--run-comfyui',  default=False,
                         help='运行 ComfyUI 去码（默认不运行，有检测目标的图片仅复制原图）')
     parser.add_argument('--workflow', type=str, default=r'workflows\f2k-漫画去码-py.json',
                         help='ComfyUI工作流JSON路径')
@@ -57,6 +58,14 @@ def main():
 
     args = parser.parse_args()
 
+    # 支持 zip 输入：source 为 .zip 时解压到临时目录作为输入源
+    original_source = args.source
+    tmp_input_dir = None
+    if is_zip_file(args.source):
+        logger.info(f"检测到 zip 输入: {args.source}")
+        tmp_input_dir = unzip_to_temp(args.source, suffix='_input')
+        args.source = tmp_input_dir
+
     print("=" * 60)
     print("检测 + ComfyUI 去码处理流程（仅图片）")
     print("=" * 60)
@@ -64,6 +73,8 @@ def main():
     # 步骤1: 调用 detect.py 进行推理（保存原图，不带检测框）
     logger.info("\n[步骤1] 运行 YOLO 检测...")
     logger.info(f"  输入目录: {args.source}")
+    if original_source != args.source:
+        logger.info(f"  原始输入: {original_source}")
     logger.info(f"  模型路径: {args.model}")
     logger.info(f"  置信阈值: {args.conf}")
     logger.info(f"  输出原图（不带检测框）")
@@ -161,6 +172,13 @@ def main():
     logger.info(f"  ComfyUI 输出目录: {args.comfyui_save_dir}")
     logger.info(f"  有检测目标: {len(images_with_detection)} 张")
     logger.info(f"  无检测目标: {len(images_without_detection)} 张")
+
+    # zip 输入时：把 comfyui-save-dir 打包成同名 zip，并清理临时输入目录
+    if original_source != args.source and tmp_input_dir:
+        output_zip = zip_directory(args.comfyui_save_dir, args.comfyui_save_dir + '.zip')
+        logger.info(f"  输出已打包: {output_zip}")
+        shutil.rmtree(tmp_input_dir, ignore_errors=True)
+        logger.info(f"  已清理临时输入目录: {tmp_input_dir}")
 
 if __name__ == '__main__':
     main()

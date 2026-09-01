@@ -10,10 +10,10 @@
 # 一、审查检测 detect / detect_comfyui 共用
 # ============================================================
 # 审查检测模型权重（默认）
-DEFAULT_CENSOR_MODEL = r'weights\censor_detect_v1.0_s_0725.pt'
+DEFAULT_CENSOR_MODEL = 'weights/censor_detect_m_0831.pt'
 
 # 画册输入目录（detect_comfyui / colorize）
-DEFAULT_ALBUM_SOURCE = r"E:\Share\[Horizontal World (またのんき▼)] キサ危機 (ブルーアーカイブ) [中国翻訳] [DL版]"
+DEFAULT_ALBUM_SOURCE = r"E:\Share"
 
 # ============================================================
 # 二、hand_distance：手部距离 → 截屏
@@ -59,7 +59,7 @@ DEFAULT_FLORENCE2_CLASSES = 'apps/classes.yaml'
 DEFAULT_FLORENCE2_CONF = 0.35
 
 # 输入目录
-DEFAULT_FLORENCE2_INPUT_DIR = r"E:\Share\[Horizontal World (またのんき▼)] キサ危機 (ブルーアーカイブ) [中国翻訳] [DL版]"
+DEFAULT_FLORENCE2_INPUT_DIR = r"E:\Share"
 
 # 结果父目录，每个输入生成独立 expN 子目录
 DEFAULT_FLORENCE2_SAVE_DIR = r'runs\florence_labels'
@@ -78,7 +78,7 @@ DEFAULT_YOLO_LABEL_CLASSES = None
 DEFAULT_YOLO_CONF = 0.4
 
 # 输入目录（复用 Florence-2 的输入源）
-DEFAULT_YOLO_INPUT_DIR = r"E:\Share\(C108) [サークルフィオレ (えかきびと)] ドキドキ、ヤだ! (ゼンレスゾーンゼロ) [中国翻訳]"
+DEFAULT_YOLO_INPUT_DIR = r"E:\Share"
 
 # 结果父目录，每个输入生成独立 expN 子目录
 DEFAULT_YOLO_SAVE_DIR = r'runs\yolo_labels'
