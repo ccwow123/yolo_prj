@@ -7,13 +7,19 @@
 """
 
 # ============================================================
-# 一、审查检测 detect / detect_comfyui 共用
+# 一、审查检测 / 上色（workflow_decensor / workflow_colorize）
 # ============================================================
 # 审查检测模型权重（默认）
 DEFAULT_CENSOR_MODEL = 'weights/censor_detect_m_0831.pt'
 
-# 画册输入目录（detect_comfyui / colorize）
-DEFAULT_ALBUM_SOURCE = r"E:\Share"
+# 审查检测输入目录（workflow_decensor 专用，图片目录 / zip 均可）
+DEFAULT_CENSOR_SOURCE = r"E:\Share"
+
+# 上色输入目录（workflow_colorize 专用）
+DEFAULT_COLORIZE_SOURCE = r"E:\Share"
+
+# 去码输出目录/zip 文件的命名后缀标记
+CENSOR_OUT_SUFFIX = '[去码]'
 
 # ============================================================
 # 二、hand_distance：手部距离 → 截屏
@@ -27,8 +33,8 @@ DEFAULT_HAND_SAVE_DIR = r'runs\hand_distance'
 # 去重截图的通用命中根目录（extract_hand_dedup 手动筛选用）
 DEFAULT_TARGET_ROOT = r'runs'
 
-# 示例视频（与画册目录同一来源，保留语义别名便于后续独立调整）
-DEFAULT_VIDEO_SOURCE = DEFAULT_ALBUM_SOURCE
+# 示例视频输入（hand_distance 系列专用，各脚本独立源）
+DEFAULT_VIDEO_SOURCE = r"E:\Share"
 
 # --- 推理性能调参 ---
 # 视频推理输入的最长边像素（预缩放，0/None 表示不缩放）
@@ -41,7 +47,7 @@ DEFAULT_INFER_IMGSZ = None
 DEFAULT_MOTION_THRESHOLD = 4
 
 # ============================================================
-# 三、auto_label / Florence-2
+# 三、auto_label : Florence-2
 # ============================================================
 # Florence-2 模型本地仓库目录（含 config.json + model.safetensors，
 # 从 HuggingFace 下载 microsoft/Florence-2-base 或 Florence-2-large 后放到这里）

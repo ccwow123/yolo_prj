@@ -65,8 +65,8 @@ def get_next_exp_dir(base_dir='runs/exp'):
 
 def imread_unicode(path):
     """兼容含非 ASCII 字符路径的读图 (cv2.imread 在 Windows 上对这类路径会静默返回 None)。
-    文件不存在/无法解码时返回 None。"""
-    if not os.path.exists(path):
+    文件不存在/是目录/无法解码时返回 None。"""
+    if not os.path.isfile(path):
         return None
     data = np.fromfile(path, dtype=np.uint8)
     return cv2.imdecode(data, cv2.IMREAD_COLOR)
@@ -828,6 +828,32 @@ def load_yolo_model(model_path):
 def is_zip_file(path):
     """判断路径是否为 zip 文件（扩展名 .zip 且文件存在）。"""
     return os.path.isfile(path) and str(path).lower().endswith('.zip')
+
+
+def collect_zip_sources(source):
+    """判断输入是否为 zip 模式并收集 zip 文件路径。
+
+    - source 为单个 .zip 文件       → (True, [该 zip])
+    - source 为目录且内含 .zip      → (True, [目录内所有 zip，按名排序])
+    - 否则                          → (False, [])
+
+    Args:
+        source: 图片目录 / 图片文件 / zip 文件 / 含 zip 的目录路径
+
+    Returns:
+        (is_zip_mode, zip_paths)
+    """
+    if os.path.isfile(source) and is_zip_file(source):
+        return True, [source]
+    if os.path.isdir(source):
+        zips = sorted(
+            os.path.join(source, f)
+            for f in os.listdir(source)
+            if is_zip_file(os.path.join(source, f))
+        )
+        if zips:
+            return True, zips
+    return False, []
 
 
 def unzip_to_temp(zip_path, suffix=''):
