@@ -1,0 +1,255 @@
+{
+  "8": {
+    "inputs": {
+      "samples": [
+        "63",
+        0
+      ],
+      "vae": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "12": {
+    "inputs": {
+      "text": "score_1, score_2, score_3,bad anatomy, bad proportions, deformed anatomy, deformed face, deformed eyes, text, multiple fingers,watermark,artist name,censor,mosaic, shadows, highlights, strong lighting, dramatic lighting, rim light, backlighting, high contrast, volumetric lighting",
+      "clip": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "15": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "28": {
+    "inputs": {
+      "width": [
+        "122",
+        0
+      ],
+      "height": [
+        "124",
+        0
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent图像"
+    }
+  },
+  "44": {
+    "inputs": {
+      "unet_name": "Anima\\oneObsessionAnima_v30.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNet加载器"
+    }
+  },
+  "45": {
+    "inputs": {
+      "clip_name": "qwen_3_06b_base.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "加载CLIP"
+    }
+  },
+  "63": {
+    "inputs": {
+      "seed": 305501297534156,
+      "steps": 6,
+      "cfg": 1,
+      "sampler_name": "er_sde",
+      "scheduler": "beta",
+      "denoise": 1,
+      "model": [
+        "129",
+        0
+      ],
+      "positive": [
+        "106",
+        0
+      ],
+      "negative": [
+        "12",
+        0
+      ],
+      "latent_image": [
+        "28",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "95": {
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "预览图像"
+    }
+  },
+  "106": {
+    "inputs": {
+      "text": [
+        "113",
+        0
+      ],
+      "clip": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "113": {
+    "inputs": {
+      "string_a": [
+        "119",
+        0
+      ],
+      "string_b": [
+        "117",
+        0
+      ],
+      "delimiter": ""
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "连接"
+    }
+  },
+  "117": {
+    "inputs": {
+      "string_a": [
+        "120",
+        0
+      ],
+      "string_b": [
+        "127",
+        0
+      ],
+      "delimiter": ""
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "连接"
+    }
+  },
+  "119": {
+    "inputs": {
+      "value": ""
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "画师串"
+    }
+  },
+  "120": {
+    "inputs": {
+      "value": ",masterpiece, best quality, score_9, score_8，highres, absurdres,anime screenshot,year 2025,"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "质量提示词"
+    }
+  },
+  "121": {
+    "inputs": {
+      "value": "请输入画面描述"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "画面描述"
+    }
+  },
+  "122": {
+    "inputs": {
+      "value": 768
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "图片的宽"
+    }
+  },
+  "124": {
+    "inputs": {
+      "value": 512
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "图片的长"
+    }
+  },
+  "127": {
+    "inputs": {
+      "string_a": [
+        "121",
+        0
+      ],
+      "string_b": [
+        "128",
+        0
+      ],
+      "delimiter": ","
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "连接"
+    }
+  },
+  "128": {
+    "inputs": {
+      "value": ""
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "lora触发词"
+    }
+  },
+  "129": {
+    "inputs": {
+      "lora_name": "anima\\anima-turbo-lora-v0.2.safetensors",
+      "strength_model": 1,
+      "model": [
+        "44",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRA加载器（仅模型）"
+    }
+  }
+}

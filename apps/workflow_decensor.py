@@ -10,7 +10,8 @@ sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))
 from detect import run_detection
 from utils import ComfyUIClient, load_yolo_model, configure_logging
 from utils import unzip_to_temp, zip_directory, collect_zip_sources
-from utils.config import DEFAULT_CENSOR_SOURCE, DEFAULT_CENSOR_MODEL, CENSOR_OUT_SUFFIX
+from utils.config import (DEFAULT_CENSOR_SOURCE, DEFAULT_CENSOR_MODEL,
+                          CENSOR_OUT_SUFFIX, DEFAULT_DECENSOR_OUT_DIR)
 
 '''
 这个脚本用于检测漫画输入（文件夹1）中的图片，并使用ComfyUI去码处理。
@@ -89,8 +90,9 @@ def _run_pipeline(model, model_path, source, args, comfyui_save_dir):
     }
 
 
-def _run_zip_batch(model, args, zip_paths):
-    """批量 zip 模式：逐个解压→处理→打包「源文件名[去码].zip」并清理临时目录。"""
+def _run_zip_batch(model, args, zip_paths, out_dir):
+    """批量 zip 模式：逐个解压→处理→打包「源文件名[去码].zip」到 out_dir 并清理临时目录。"""
+    os.makedirs(out_dir, exist_ok=True)
     total = len(zip_paths)
     for i, zp in enumerate(zip_paths, 1):
         logger.info(f"\n[{i}/{total}] 处理压缩包: {zp}")
@@ -102,7 +104,7 @@ def _run_zip_batch(model, args, zip_paths):
                 logger.error(f"  检测失败，跳过: {zp}")
                 continue
             stem = os.path.splitext(os.path.basename(zp))[0]
-            output_zip = os.path.join(os.path.dirname(zp), stem + CENSOR_OUT_SUFFIX + '.zip')
+            output_zip = os.path.join(out_dir, stem + CENSOR_OUT_SUFFIX + '.zip')
             zip_directory(tmp_out, output_zip)
             logger.info(f"  已打包并删除输出目录: {output_zip}")
         finally:
@@ -140,6 +142,8 @@ def main():
                         help='ComfyUI服务器地址')
     parser.add_argument('--poll-timeout', type=int, default=300,
                         help='ComfyUI 轮询等待超时（秒），0 不限制')
+    parser.add_argument('--out-zip-dir', type=str, default=DEFAULT_DECENSOR_OUT_DIR,
+                        help='zip 模式下输出 zip 的目标目录（文件名保持「源文件名[去码].zip」）')
 
     args = parser.parse_args()
 
@@ -158,7 +162,7 @@ def main():
         exit(1)
 
     if is_zip_mode:
-        _run_zip_batch(model, args, zip_paths)
+        _run_zip_batch(model, args, zip_paths, args.out_zip_dir)
         print("\n" + "=" * 60)
         print("全部 zip 处理完成！")
         print("=" * 60)
