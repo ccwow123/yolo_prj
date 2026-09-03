@@ -18,14 +18,8 @@ DEFAULT_CENSOR_SOURCE = r"E:\Share"
 # 上色输入目录（workflow_colorize 专用）
 DEFAULT_COLORIZE_SOURCE = r"E:\Share"
 
-# 去码输出目录/zip 文件的命名后缀标记
-CENSOR_OUT_SUFFIX = '[去码]'
-
 # zip 模式下去码输出 zip 的目标目录（文件名保持「源文件名[去码].zip」）
 DEFAULT_DECENSOR_OUT_DIR = r"E:\Share\manga_output"
-
-# 上色输出 zip 文件的命名后缀标记
-COLORIZE_OUT_SUFFIX = '[上色]'
 
 # ============================================================
 # 二、hand_distance：手部距离 → 截屏

@@ -10,7 +10,7 @@ sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))
 from tqdm import tqdm
 from utils import ComfyUIClient, is_grayscale, collect_source_items, configure_logging
 from utils import unzip_to_temp, zip_directory, collect_zip_sources
-from utils.config import DEFAULT_COLORIZE_SOURCE, COLORIZE_OUT_SUFFIX
+from utils.config import DEFAULT_COLORIZE_SOURCE
 
 '''
 这个脚本用于将漫画灰度图（文件夹1）上色，并通过ComfyUI输出彩色图。
@@ -110,7 +110,7 @@ def _run_zip_batch(args, zip_paths):
                 logger.error(f"  处理失败，跳过: {zp}")
                 continue
             stem = os.path.splitext(os.path.basename(zp))[0]
-            output_zip = os.path.join(os.path.dirname(zp), stem + COLORIZE_OUT_SUFFIX + '.zip')
+            output_zip = os.path.join(os.path.dirname(zp), stem + '[上色]' + '.zip')
             zip_directory(tmp_out, output_zip)
             logger.info(f"  已打包并删除输出目录: {output_zip}")
         finally:

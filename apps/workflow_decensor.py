@@ -11,7 +11,7 @@ from detect import run_detection
 from utils import ComfyUIClient, load_yolo_model, configure_logging
 from utils import unzip_to_temp, zip_directory, collect_zip_sources
 from utils.config import (DEFAULT_CENSOR_SOURCE, DEFAULT_CENSOR_MODEL,
-                          CENSOR_OUT_SUFFIX, DEFAULT_DECENSOR_OUT_DIR)
+                          DEFAULT_DECENSOR_OUT_DIR)
 
 '''
 这个脚本用于检测漫画输入（文件夹1）中的图片，并使用ComfyUI去码处理。
@@ -104,7 +104,7 @@ def _run_zip_batch(model, args, zip_paths, out_dir):
                 logger.error(f"  检测失败，跳过: {zp}")
                 continue
             stem = os.path.splitext(os.path.basename(zp))[0]
-            output_zip = os.path.join(out_dir, stem + CENSOR_OUT_SUFFIX + '.zip')
+            output_zip = os.path.join(out_dir, stem + '[去码]' + '.zip')
             zip_directory(tmp_out, output_zip)
             logger.info(f"  已打包并删除输出目录: {output_zip}")
         finally:
@@ -136,7 +136,7 @@ def main():
     parser.add_argument('--workflow', type=str, default=r'workflows\f2k-漫画去码-py.json',
                         help='ComfyUI工作流JSON路径')
     parser.add_argument('--comfyui-save-dir', type=str,
-                        default=DEFAULT_CENSOR_SOURCE + CENSOR_OUT_SUFFIX,
+                        default=DEFAULT_CENSOR_SOURCE + '[去码]',
                         help='图片模式下结果保存目录（zip 模式下每包用独立临时目录）')
     parser.add_argument('--comfyui-server', type=str, default='http://127.0.0.1:8188',
                         help='ComfyUI服务器地址')
