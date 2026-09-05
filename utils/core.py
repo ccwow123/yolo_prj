@@ -207,7 +207,30 @@ def _build_detections(result):
     return detections
 
 
-def save_detection_results(result, save_dir, filename, save_json=False, save_annotated=True):
+def draw_boxes_by_classes(result, out_path, classes=None):
+    """仅对指定类别在 result.orig_img 上画框并保存到 out_path。
+
+    类别按名称匹配（classes 为名称的可迭代集合）；None 表示画所有框。
+    复用 ultralytics Annotator 的画框/配色，与 result.save() 的观感一致。
+    """
+    from ultralytics.utils.plotting import Annotator, colors
+    img = result.orig_img.copy()
+    names = result.names if hasattr(result, 'names') else {}
+    ann = Annotator(img)
+    if result.boxes is not None:
+        for box in result.boxes:
+            cls = int(box.cls)
+            name = names.get(cls, str(cls))
+            if classes and name not in classes:
+                continue
+            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+            conf = float(box.conf)
+            ann.box_label((x1, y1, x2, y2), '%s %.2f' % (name, conf),
+                          color=colors(cls, True))
+    cv2.imwrite(out_path, img)
+
+
+def save_detection_results(result, save_dir, filename, save_json=False, save_annotated=True, annotate_classes=None):
     """
     保存检测结果到文件
     
@@ -217,6 +240,7 @@ def save_detection_results(result, save_dir, filename, save_json=False, save_ann
         filename: 文件名
         save_json: 是否保存单个json标注文件（汇总json始终保存）
         save_annotated: 是否保存带检测框的图片，False则保存原图
+        annotate_classes: 类别名集合；指定后带框图仅对匹配类别的检测框画框
     
     Returns:
         dict: 检测结果数据（用于汇总），如果没有检测结果返回None
@@ -225,8 +249,13 @@ def save_detection_results(result, save_dir, filename, save_json=False, save_ann
     
     # 保存图片结果
     if save_annotated:
-        # YOLO自带的保存方法，内部按 BGR 语义处理，颜色正确
-        result.save(os.path.join(save_dir, filename))
+        if annotate_classes:
+            # 仅对指定类别画框
+            draw_boxes_by_classes(result, os.path.join(save_dir, filename),
+                                  classes=annotate_classes)
+        else:
+            # YOLO自带的保存方法，内部按 BGR 语义处理，颜色正确
+            result.save(os.path.join(save_dir, filename))
     else:
         # 保存原始图像：result.orig_img 实际为 BGR（由 cv2 读入），
         # 需先转 RGB 再交给 PIL，否则会 B/R 通道交换导致变色

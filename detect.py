@@ -154,13 +154,15 @@ def run_video_detection(model, source, conf, save_dir, save_json, save_annotated
     
     return video_results
 
-def run_detection(model, model_path, source, conf, save_dir, save_json, save_annotated=True, sample_interval=1, image_only=False, annotated_dir=None):
+def run_detection(model, model_path, source, conf, save_dir, save_json, save_annotated=True, sample_interval=1, image_only=False, annotated_dir=None, annotate_classes=None):
     """运行检测主函数（model 已加载）
 
     image_only=True 时仅处理图片，跳过视频文件（供 detect_comfyui 等仅图片流程复用）。
     annotated_dir=True 时，图片分支额外保存一份带检测框的预览图到 <save_dir>/annotated，
     不影响 save_dir（folder2/源图）的正常保存，用于人工核对检测结果。
     返回的第三项为实际带框预览目录（未启用时为 None）。
+
+    annotate_classes 为类别名集合：指定后带框预览仅对匹配类别的检测框画框。
 
     Returns:
         (save_dir, all_results, annotated_dir): 实际输出目录、逐图检测结果、带框预览目录；失败返回 (None, None, None)
@@ -189,10 +191,10 @@ def run_detection(model, model_path, source, conf, save_dir, save_json, save_ann
             else:
                 results = model(path, conf=conf, save=False, verbose=False)
                 base_name = os.path.basename(path)
-                img_results = save_detection_results(results[0], save_dir, base_name, save_json, save_annotated)
+                img_results = save_detection_results(results[0], save_dir, base_name, save_json, save_annotated, annotate_classes)
                 if annotated_dir:
                     # 独立目录再存一份带框预览，供人工检查，不影响源图
-                    save_detection_results(results[0], annotated_dir, base_name, save_json=False, save_annotated=True)
+                    save_detection_results(results[0], annotated_dir, base_name, save_json=False, save_annotated=True, annotate_classes=annotate_classes)
                 if img_results:
                     all_results.append(img_results)
             pbar.update(1)

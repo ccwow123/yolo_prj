@@ -42,7 +42,8 @@ def _run_pipeline(model, model_path, source, args, comfyui_save_dir):
         model, model_path, source, args.conf,
         args.detect_save_dir, args.save_json,
         save_annotated=False, image_only=True,
-        annotated_dir=args.annotated_dir
+        annotated_dir=args.annotated_dir,
+        annotate_classes=args.annotate_classes
     )
     if detect_output_dir is None:
         return None
@@ -121,14 +122,16 @@ def main():
                         help='模型权重文件路径（默认从 config 读取）')
     parser.add_argument('--source', type=str, default=DEFAULT_CENSOR_SOURCE,
                         help='输入：图片目录 / 图片文件 / zip / 含 zip 的目录')
-    parser.add_argument('--conf', type=float, default=0.3,
+    parser.add_argument('--conf', type=float, default=0.5,
                         help='检测置信度阈值')
     parser.add_argument('--detect-save-dir', type=str, default=r'runs\detections',
                         help='检测结果保存目录（自动生成 expN）')
     parser.add_argument('--save-json', action='store_true', default=False,
                         help='保存单个检测json文件（汇总json始终保存）')
-    parser.add_argument('--annotated-dir', action='store_true', default=False,
+    parser.add_argument('--annotated-dir', action='store_true', default=True,
                         help='启用后把带检测框预览保存到 expN\\annotated 目录（不影响源图）')
+    parser.add_argument('--annotate-classes', type=str, default=['penis','pussy'],
+                        help='按类别画框：list 格式的类别名，如 ["对话气泡","文字"]；仅对匹配类别的检测框画框；不传则画所有框')
 
     # ComfyUI 参数
     parser.add_argument('--run-comfyui', action='store_true', default=False,
@@ -147,6 +150,20 @@ def main():
 
     args = parser.parse_args()
 
+    # list 格式类别名（如 ["对话气泡","文字"]）→ 集合；不传/空则画所有框
+    if args.annotate_classes:
+        if isinstance(args.annotate_classes, str):
+            try:
+                raw = ast.literal_eval(args.annotate_classes)
+            except (ValueError, SyntaxError):
+                logger.error("--annotate-classes 需为 list 格式，如 [\"对话气泡\",\"文字\"]")
+                exit(1)
+        else:
+            raw = args.annotate_classes
+        args.annotate_classes = {str(c).strip() for c in raw if str(c).strip()}
+    else:
+        args.annotate_classes = None
+
     is_zip_mode, zip_paths = collect_zip_sources(args.source)
 
     print("=" * 60)
@@ -154,6 +171,8 @@ def main():
         print(f"检测 + ComfyUI 去码（zip 模式，共 {len(zip_paths)} 个压缩包）")
     else:
         print("检测 + ComfyUI 去码（图片目录/图片文件模式）")
+    if args.annotate_classes:
+        print(f"按类别画框: {', '.join(sorted(args.annotate_classes))}")
     print("=" * 60)
 
     model, device_info = load_yolo_model(args.model)

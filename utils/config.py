@@ -10,7 +10,7 @@
 # 一、审查检测 / 上色（workflow_decensor / workflow_colorize）
 # ============================================================
 # 审查检测模型权重（默认）
-DEFAULT_CENSOR_MODEL = 'weights/censor_detect_m_0831.pt'
+DEFAULT_CENSOR_MODEL = 'weights/anime_censor_detection-s.pt'
 
 # 审查检测输入目录（workflow_decensor 专用，图片目录 / zip 均可）
 DEFAULT_CENSOR_SOURCE = r"E:\Share"
